@@ -1,11 +1,11 @@
 {
-  "uuid": "usage-limits@example",
-  "name": "Usage Limits",
-  "description": "Minimal GNOME top-bar indicator scaffold.",
+  "uuid": "brainusage@altairinglorious",
+  "name": "Brain Usage",
+  "description": "Track Claude and Codex AI usage limits in the GNOME top panel.",
   "version": 1,
   "shell-version": [
     "45",
     "46"
   ],
-  "settings-schema": "org.gnome.shell.extensions.usage-limits"
+  "settings-schema": "org.gnome.shell.extensions.brainusage"
 }

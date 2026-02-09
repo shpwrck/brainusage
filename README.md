@@ -27,11 +27,11 @@ These credential files are created automatically when you sign in to the respect
 
 ### From GitHub Releases (recommended)
 
-1. Download the latest `usage-limits@example.shell-extension.zip` from [Releases](https://github.com/AltairInglorious/brainusage/releases/latest)
+1. Download the latest `brainusage@altairinglorious.shell-extension.zip` from [Releases](https://github.com/AltairInglorious/brainusage/releases/latest)
 
 2. Install via terminal:
    ```bash
-   gnome-extensions install --force usage-limits@example.shell-extension.zip
+   gnome-extensions install --force brainusage@altairinglorious.shell-extension.zip
    ```
 
 3. Restart GNOME Shell:
@@ -40,7 +40,7 @@ These credential files are created automatically when you sign in to the respect
 
 4. Enable the extension:
    ```bash
-   gnome-extensions enable usage-limits@example
+   gnome-extensions enable brainusage@altairinglorious
    ```
 
 ### From source

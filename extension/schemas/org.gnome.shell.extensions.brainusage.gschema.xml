@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <schema id="org.gnome.shell.extensions.usage-limits"
-          path="/org/gnome/shell/extensions/usage-limits/">
+  <schema id="org.gnome.shell.extensions.brainusage"
+          path="/org/gnome/shell/extensions/brainusage/">
     <key name="panel-label-mode" type="s">
       <default>'min'</default>
       <summary>Which metric to show in the panel</summary>

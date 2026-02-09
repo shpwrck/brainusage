@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-UUID="usage-limits@example"
+UUID="brainusage@altairinglorious"
 ZIP_PATH="$ROOT_DIR/${UUID}.shell-extension.zip"
 
 if ! command -v gnome-extensions >/dev/null 2>&1; then

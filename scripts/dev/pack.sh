@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EXTENSION_DIR="$ROOT_DIR/extension"
-ZIP_NAME="usage-limits@example.shell-extension.zip"
+ZIP_NAME="brainusage@altairinglorious.shell-extension.zip"
 ZIP_PATH="$ROOT_DIR/$ZIP_NAME"
 EVIDENCE_PATH="$ROOT_DIR/.sisyphus/evidence/task-7-pack.txt"
 
@@ -16,7 +16,7 @@ mkdir -p "$ROOT_DIR/.sisyphus/evidence"
 
 gnome-extensions pack "$EXTENSION_DIR" \
   --force \
-  --schema=schemas/org.gnome.shell.extensions.usage-limits.gschema.xml \
+  --schema=schemas/org.gnome.shell.extensions.brainusage.gschema.xml \
   --extra-source=lib \
   --out-dir "$ROOT_DIR" 2>&1 | tee "$EVIDENCE_PATH"
 
