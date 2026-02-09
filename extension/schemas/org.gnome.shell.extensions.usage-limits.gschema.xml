@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.usage-limits"
+          path="/org/gnome/shell/extensions/usage-limits/">
+    <key name="panel-label-mode" type="s">
+      <default>'min'</default>
+      <summary>Which metric to show in the panel</summary>
+      <description>
+        Options: min, claude-session, claude-weekly, codex-session, codex-weekly
+      </description>
+    </key>
+  </schema>
+</schemalist>

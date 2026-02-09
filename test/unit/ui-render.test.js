@@ -1,6 +1,6 @@
 import {describe, expect, test} from 'bun:test';
 
-import {buildUsageViewModel, formatRelativeTime, getDotColor} from '../../extension/lib/ui/render.js';
+import {buildUsageViewModel, formatRelativeTime, getDotColor, PANEL_LABEL_MODES} from '../../extension/lib/ui/render.js';
 
 const NOW = new Date('2026-02-09T10:00:00Z').getTime();
 
@@ -112,6 +112,88 @@ describe('buildUsageViewModel', () => {
     test('accepts custom version string', () => {
         const view = buildUsageViewModel(null, {now: NOW, version: 'test 1.0'});
         expect(view.version).toBe('test 1.0');
+    });
+
+    test('panelLabelMode claude-session shows claude session %', () => {
+        const view = buildUsageViewModel({
+            minRemainingPct: 12.4,
+            providers: {
+                claude: {
+                    code: 'OK',
+                    data: {sessionRemainingPct: 60, weeklyRemainingPct: 25},
+                },
+                codex: {
+                    code: 'OK',
+                    data: {sessionRemainingPct: 73, weeklyRemainingPct: 91},
+                },
+            },
+        }, {now: NOW, panelLabelMode: 'claude-session'});
+        expect(view.panelLabel).toBe('60%');
+    });
+
+    test('panelLabelMode claude-weekly shows claude weekly %', () => {
+        const view = buildUsageViewModel({
+            minRemainingPct: 12.4,
+            providers: {
+                claude: {
+                    code: 'OK',
+                    data: {sessionRemainingPct: 60, weeklyRemainingPct: 25},
+                },
+            },
+        }, {now: NOW, panelLabelMode: 'claude-weekly'});
+        expect(view.panelLabel).toBe('25%');
+    });
+
+    test('panelLabelMode codex-session shows codex session %', () => {
+        const view = buildUsageViewModel({
+            minRemainingPct: 12.4,
+            providers: {
+                codex: {
+                    code: 'OK',
+                    data: {sessionRemainingPct: 73, weeklyRemainingPct: 91},
+                },
+            },
+        }, {now: NOW, panelLabelMode: 'codex-session'});
+        expect(view.panelLabel).toBe('73%');
+    });
+
+    test('panelLabelMode codex-weekly shows codex weekly %', () => {
+        const view = buildUsageViewModel({
+            minRemainingPct: 12.4,
+            providers: {
+                codex: {
+                    code: 'OK',
+                    data: {sessionRemainingPct: 73, weeklyRemainingPct: 91},
+                },
+            },
+        }, {now: NOW, panelLabelMode: 'codex-weekly'});
+        expect(view.panelLabel).toBe('91%');
+    });
+
+    test('panelLabelMode defaults to min', () => {
+        const view = buildUsageViewModel({
+            minRemainingPct: 12.4,
+            providers: {
+                claude: {
+                    code: 'OK',
+                    data: {sessionRemainingPct: 60, weeklyRemainingPct: 25},
+                },
+            },
+        }, {now: NOW});
+        expect(view.panelLabel).toBe('12%');
+    });
+
+    test('panelLabelMode with missing provider data shows --', () => {
+        const view = buildUsageViewModel({providers: {}}, {now: NOW, panelLabelMode: 'claude-session'});
+        expect(view.panelLabel).toBe('--');
+    });
+
+    test('panelLabelMode with unknown mode falls back to min', () => {
+        const view = buildUsageViewModel({
+            minRemainingPct: 42,
+            providers: {},
+        }, {now: NOW, panelLabelMode: 'unknown-mode'});
+        expect(view.panelLabel).toBe('42%');
     });
 });
 

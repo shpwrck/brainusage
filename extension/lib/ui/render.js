@@ -1,5 +1,24 @@
 const VERSION = 'brainusage 0.0.1';
 
+export const PANEL_LABEL_MODES = ['min', 'claude-session', 'claude-weekly', 'codex-session', 'codex-weekly'];
+
+function getPanelLabelValue(summary, mode) {
+    if (mode === 'min' || !mode)
+        return summary?.minRemainingPct;
+
+    const providers = summary?.providers;
+    if (!providers)
+        return undefined;
+
+    switch (mode) {
+        case 'claude-session': return providers.claude?.data?.sessionRemainingPct;
+        case 'claude-weekly':  return providers.claude?.data?.weeklyRemainingPct;
+        case 'codex-session':  return providers.codex?.data?.sessionRemainingPct;
+        case 'codex-weekly':   return providers.codex?.data?.weeklyRemainingPct;
+        default: return summary?.minRemainingPct;
+    }
+}
+
 function formatPercent(value) {
     if (!Number.isFinite(value))
         return '--';
@@ -136,12 +155,13 @@ export function buildUsageViewModel(summary, deps = {}) {
     const now = deps.now ?? Date.now();
     const version = deps.version ?? VERSION;
     const pollIntervalMs = deps.pollIntervalMs ?? 180_000;
+    const panelLabelMode = deps.panelLabelMode ?? 'min';
 
     const claude = summary?.providers?.claude ?? null;
     const codex = summary?.providers?.codex ?? null;
 
     return {
-        panelLabel: formatPercent(summary?.minRemainingPct),
+        panelLabel: formatPercent(getPanelLabelValue(summary, panelLabelMode)),
         services: [
             buildServiceViewModel('Codex', codex?.data, codex?.code, now),
             buildServiceViewModel('Claude', claude?.data, claude?.code, now),

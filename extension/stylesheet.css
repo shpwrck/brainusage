@@ -1,91 +1,87 @@
+/* Popup Container */
 .usage-popup-box {
-    padding: 12px;
+    padding: 16px;
     min-width: 340px;
+    spacing: 12px;
 }
 
+/* Service Card — subtle background for visual grouping */
+.usage-service-card {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 12px;
+    spacing: 4px;
+}
+
+/* Service Header */
 .usage-service-header {
     spacing: 8px;
 }
-
 .usage-service-name {
     font-size: 15px;
     font-weight: bold;
+    color: #ffffff;
 }
 
-.usage-plan-badge {
-    border: 1px solid #9ca3af;
-    border-radius: 10px;
-    padding: 2px 8px;
-    font-size: 11px;
-    color: #9ca3af;
-}
-
+/* Window Row */
 .usage-window-row {
     margin-top: 8px;
     spacing: 4px;
 }
-
-.usage-window-label-row {
-    spacing: 6px;
-}
-
 .usage-window-label {
     font-size: 13px;
     font-weight: bold;
+    color: #ffffff;
 }
 
-.usage-dot-green {
-    width: 8px;
-    height: 8px;
-    border-radius: 4px;
-    background-color: #22c55e;
-}
-
-.usage-dot-yellow {
-    width: 8px;
-    height: 8px;
-    border-radius: 4px;
-    background-color: #eab308;
-}
-
-.usage-dot-red {
-    width: 8px;
-    height: 8px;
-    border-radius: 4px;
-    background-color: #ef4444;
-}
-
+/* Progress Bar Track — dark-aware translucent */
 .usage-progress-track {
     height: 10px;
-    background-color: #e5e7eb;
+    background-color: rgba(255, 255, 255, 0.1);
     border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.usage-progress-fill {
+/* Progress Bar Fill — color-coded by health status */
+.usage-fill-green {
     height: 10px;
-    background-color: #1e1b4b;
+    background-color: #22c55e;
+    border-radius: 5px;
+}
+.usage-fill-yellow {
+    height: 10px;
+    background-color: #eab308;
+    border-radius: 5px;
+}
+.usage-fill-red {
+    height: 10px;
+    background-color: #ef4444;
     border-radius: 5px;
 }
 
+/* Info Row — high-contrast secondary text */
 .usage-info-row {
     font-size: 12px;
-    color: #6b7280;
+    color: rgba(255, 255, 255, 0.7);
 }
 
+/* Separator — barely-visible hairline */
 .usage-separator {
     height: 1px;
-    background-color: #e5e7eb;
-    margin-top: 12px;
-    margin-bottom: 12px;
+    background-color: rgba(255, 255, 255, 0.08);
+    margin-top: 4px;
+    margin-bottom: 4px;
 }
 
+/* Footer */
 .usage-footer-row {
     font-size: 11px;
-    color: #9ca3af;
+    color: rgba(255, 255, 255, 0.5);
 }
 
+/* Warning */
 .usage-warning {
     font-size: 12px;
-    color: #ef4444;
+    color: #f87171;
     margin-top: 4px;
 }
