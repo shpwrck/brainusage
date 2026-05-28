@@ -2,7 +2,8 @@
   "uuid": "brainusage@altairinglorious",
   "name": "Brain Usage",
   "description": "Track Claude and Codex AI usage limits in the GNOME top panel.",
-  "version": 1,
+  "version": 2,
+  "version-name": "1.0.0",
   "shell-version": [
     "45",
     "46",
