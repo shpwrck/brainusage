@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mkdir -p .sisyphus/evidence
-gnome-extensions pack extension --force 2>&1 | tee .sisyphus/evidence/task-0-pack.txt
+# Smoke pack delegates to the GNOME pack script, which vendors shared/ first.
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+bash "$ROOT_DIR/scripts/gnome/pack.sh"
