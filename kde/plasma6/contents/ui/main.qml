@@ -109,11 +109,19 @@ PlasmoidItem {
     }
 
     fullRepresentation: Item {
+        // Size the popup to its content height: anchors.fill makes the column
+        // fill this Item, so the Item must take its implicit height from the
+        // column (otherwise the popup collapses to minimumHeight and clips the
+        // lower service card). No binding loop: column.implicitHeight derives
+        // from its children, not from its own (anchored) height.
         Layout.minimumWidth: Kirigami.Units.gridUnit * 18
         Layout.preferredWidth: Kirigami.Units.gridUnit * 18
-        Layout.minimumHeight: Kirigami.Units.gridUnit * 16
+        Layout.minimumHeight: content.implicitHeight + 24
+        Layout.preferredHeight: content.implicitHeight + 24
+        implicitHeight: content.implicitHeight + 24
 
         ColumnLayout {
+            id: content
             anchors.fill: parent
             anchors.margins: 12
             spacing: 12
