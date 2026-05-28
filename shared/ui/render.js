@@ -1,4 +1,4 @@
-const VERSION = 'brainusage 1.0.0';
+const VERSION = 'brainusage 1.0.1';
 
 export const PANEL_LABEL_MODES = ['min', 'claude-session', 'claude-weekly', 'codex-session', 'codex-weekly'];
 

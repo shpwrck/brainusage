@@ -34,7 +34,7 @@ describe('buildUsageViewModel', () => {
             }
         }
 
-        expect(view.version).toBe('brainusage 1.0.0');
+        expect(view.version).toBe('brainusage 1.0.1');
         expect(view.lastUpdate).toBe('Next update in --');
     });
 

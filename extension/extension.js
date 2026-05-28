@@ -139,7 +139,7 @@ class UsageIndicator extends PanelMenu.Button {
 
         const footerRow = new St.BoxLayout({style_class: 'usage-footer-row'});
         footerRow.set_x_expand(true);
-        this._versionLabel = new St.Label({text: 'brainusage 1.0.0'});
+        this._versionLabel = new St.Label({text: 'brainusage 1.0.1'});
         this._nextUpdateLabel = new St.Label({text: 'Next update in --'});
         const footerSpacer = new St.Widget();
         footerSpacer.set_x_expand(true);

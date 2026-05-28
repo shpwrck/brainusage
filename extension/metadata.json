@@ -3,7 +3,7 @@
   "name": "Brain Usage",
   "description": "Track Claude and Codex AI usage limits in the GNOME top panel.",
   "version": 2,
-  "version-name": "1.0.0",
+  "version-name": "1.0.1",
   "shell-version": [
     "45",
     "46",
