@@ -10,7 +10,9 @@ Tracks your AI usage limits for **Claude** (Anthropic) and **Codex/ChatGPT** (Op
 
 - Session and weekly usage tracking for Claude and Codex
 - Color-coded progress bars (green / yellow / red) based on remaining percentage
-- Configurable panel label: show minimum across all, or a specific window
+- GNOME: multi-metric panel display with provider logos and health-colored values; show any combination of Claude/Codex session and week
+- GNOME: toggle panel values between remaining and used percentage
+- KDE: configurable panel label (minimum across all, or a specific window)
 - Desktop notifications when usage drops below 20%
 - Auto-refresh every 3 minutes with manual refresh option
 - Dark theme with modern card-based popup design
@@ -92,9 +94,19 @@ Once enabled, a percentage indicator appears in the top panel. Click it to see a
 - Time until each window resets
 - Next automatic update countdown
 
-### Panel display modes
+### Panel display (GNOME)
 
-On GNOME, open the popup and select **Panel display**; on KDE, right-click the widget → **Configure** → **Panel label**. Choose what the panel label shows:
+The top-bar indicator shows each enabled metric as `logo Session 60% Week 25%`, with every percentage colored by health (green / yellow / red). Open the popup to configure it:
+
+- **Panel display** switches — enable any combination of Claude/Codex Session/Week (the menu stays open while you toggle)
+- **Percent** submenu — show **Remaining** (default) or **Used** percentages
+- **Label style** submenu — **Expanded** (`Session`/`Week`, default) or **Compact** (`s`/`w`)
+
+Upgrading from a pre-1.1 release: if you had picked a single metric under the old *Panel display* menu, that choice is carried over automatically.
+
+### Panel display modes (KDE)
+
+Right-click the widget → **Configure** → **Panel label**. Choose what the panel label shows:
 
 | Mode | Description |
 |------|-------------|
@@ -121,3 +133,5 @@ The platform-agnostic core lives in `shared/`; GNOME and KDE each vendor it at b
 ## License
 
 MIT
+
+The Claude and OpenAI marks in `extension/assets/` are trademarks of Anthropic PBC and OpenAI respectively, used nominatively to identify the services being monitored; they are not covered by the MIT license. The OpenAI mark was sourced via [SVG Repo](https://www.svgrepo.com).

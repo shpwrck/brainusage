@@ -2,11 +2,35 @@
 <schemalist>
   <schema id="org.gnome.shell.extensions.brainusage"
           path="/org/gnome/shell/extensions/brainusage/">
+    <key name="panel-display-modes" type="as">
+      <default>['codex-session', 'codex-weekly', 'claude-session', 'claude-weekly']</default>
+      <summary>Which metrics to show in the panel</summary>
+      <description>
+        Any combination of: codex-session, codex-weekly, claude-session, claude-weekly.
+        Empty means show nothing.
+      </description>
+    </key>
+    <key name="panel-percent-mode" type="s">
+      <default>'remaining'</default>
+      <summary>Whether panel values show remaining or used percentage</summary>
+      <description>
+        Options: remaining, used
+      </description>
+    </key>
+    <key name="panel-label-style" type="s">
+      <default>'expanded'</default>
+      <summary>How panel metrics are labelled</summary>
+      <description>
+        Options: expanded (Session/Week), compact (s/w)
+      </description>
+    </key>
     <key name="panel-label-mode" type="s">
       <default>'min'</default>
-      <summary>Which metric to show in the panel</summary>
+      <summary>Deprecated: single-metric panel selection from pre-1.1 releases</summary>
       <description>
-        Options: min, claude-session, claude-weekly, codex-session, codex-weekly
+        Kept for migration only; a stored specific metric is carried over to
+        panel-display-modes on first run. Options: min, claude-session,
+        claude-weekly, codex-session, codex-weekly
       </description>
     </key>
   </schema>

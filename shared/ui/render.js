@@ -2,6 +2,73 @@ const VERSION = 'brainusage 1.0.1';
 
 export const PANEL_LABEL_MODES = ['min', 'claude-session', 'claude-weekly', 'codex-session', 'codex-weekly'];
 
+// Single source of truth for the multi-metric panel display: keys, per-provider
+// grouping, and the labels every consumer (panel widgets, settings menu) derives from.
+export const PANEL_METRICS = [
+    {key: 'codex-session', providerKey: 'codex', providerName: 'Codex', windowLabel: 'Session', shortLabel: 's', field: 'sessionRemainingPct'},
+    {key: 'codex-weekly', providerKey: 'codex', providerName: 'Codex', windowLabel: 'Week', shortLabel: 'w', field: 'weeklyRemainingPct'},
+    {key: 'claude-session', providerKey: 'claude', providerName: 'Claude', windowLabel: 'Session', shortLabel: 's', field: 'sessionRemainingPct'},
+    {key: 'claude-weekly', providerKey: 'claude', providerName: 'Claude', windowLabel: 'Week', shortLabel: 'w', field: 'weeklyRemainingPct'},
+];
+
+export const PANEL_DISPLAY_MODES = PANEL_METRICS.map((metric) => metric.key);
+export const PANEL_PERCENT_MODES = ['remaining', 'used'];
+export const PANEL_LABEL_STYLES = ['expanded', 'compact'];
+
+// Selection is stored as a set of keys; rendering always uses the canonical
+// PANEL_METRICS order. A non-array (unset) or a selection containing no valid
+// key falls back to showing everything, so a stale/renamed stored value can
+// never blank the panel. An explicitly empty selection means "show nothing".
+function normalizePanelDisplayModes(modes) {
+    if (!Array.isArray(modes))
+        return [...PANEL_DISPLAY_MODES];
+
+    if (modes.length === 0)
+        return [];
+
+    const requested = new Set(modes);
+    const valid = PANEL_DISPLAY_MODES.filter((key) => requested.has(key));
+
+    return valid.length > 0 ? valid : [...PANEL_DISPLAY_MODES];
+}
+
+function buildPanelGroups(summary, panelDisplayModes, panelPercentMode, panelLabelStyle) {
+    if (!summary)
+        return [];
+
+    const groups = [];
+    const groupByProvider = new Map();
+
+    for (const key of normalizePanelDisplayModes(panelDisplayModes)) {
+        const metric = PANEL_METRICS.find((entry) => entry.key === key);
+        const remainingPct = summary?.providers?.[metric.providerKey]?.data?.[metric.field];
+        const value = panelPercentMode === 'used' && Number.isFinite(remainingPct)
+            ? 100 - remainingPct
+            : remainingPct;
+
+        let group = groupByProvider.get(metric.providerKey);
+        if (!group) {
+            group = {
+                providerKey: metric.providerKey,
+                providerName: metric.providerName,
+                items: [],
+            };
+            groupByProvider.set(metric.providerKey, group);
+            groups.push(group);
+        }
+
+        group.items.push({
+            key: metric.key,
+            label: panelLabelStyle === 'compact' ? metric.shortLabel : metric.windowLabel,
+            percentText: formatPercent(value),
+            // Health color always tracks remaining%, regardless of percent mode.
+            dotColor: getDotColor(remainingPct),
+        });
+    }
+
+    return groups;
+}
+
 function getPanelLabelValue(summary, mode) {
     if (mode === 'min' || !mode)
         return summary?.minRemainingPct;
@@ -156,12 +223,17 @@ export function buildUsageViewModel(summary, deps = {}) {
     const version = deps.version ?? VERSION;
     const pollIntervalMs = deps.pollIntervalMs ?? 180_000;
     const panelLabelMode = deps.panelLabelMode ?? 'min';
+    const panelPercentMode = deps.panelPercentMode === 'used' ? 'used' : 'remaining';
+    const panelLabelStyle = deps.panelLabelStyle === 'compact' ? 'compact' : 'expanded';
 
     const claude = summary?.providers?.claude ?? null;
     const codex = summary?.providers?.codex ?? null;
 
     return {
         panelLabel: formatPercent(getPanelLabelValue(summary, panelLabelMode)),
+        panelGroups: buildPanelGroups(summary, deps.panelDisplayModes, panelPercentMode, panelLabelStyle),
+        panelPercentMode,
+        panelLabelStyle,
         services: [
             buildServiceViewModel('Codex', codex?.data, codex?.code, now),
             buildServiceViewModel('Claude', claude?.data, claude?.code, now),

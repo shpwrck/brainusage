@@ -197,6 +197,107 @@ describe('buildUsageViewModel', () => {
     });
 });
 
+describe('panelGroups', () => {
+    const providers = {
+        claude: {
+            code: 'OK',
+            data: {sessionRemainingPct: 60, weeklyRemainingPct: 25},
+        },
+        codex: {
+            code: 'OK',
+            data: {sessionRemainingPct: 73, weeklyRemainingPct: 91},
+        },
+    };
+
+    test('defaults to all four metrics, expanded labels, status colors', () => {
+        const view = buildUsageViewModel({providers}, {now: NOW});
+
+        expect(view.panelLabelStyle).toBe('expanded');
+        expect(view.panelPercentMode).toBe('remaining');
+        expect(view.panelGroups).toEqual([
+            {providerKey: 'codex', providerName: 'Codex', items: [
+                {key: 'codex-session', label: 'Session', percentText: '73%', dotColor: 'green'},
+                {key: 'codex-weekly', label: 'Week', percentText: '91%', dotColor: 'green'},
+            ]},
+            {providerKey: 'claude', providerName: 'Claude', items: [
+                {key: 'claude-session', label: 'Session', percentText: '60%', dotColor: 'yellow'},
+                {key: 'claude-weekly', label: 'Week', percentText: '25%', dotColor: 'red'},
+            ]},
+        ]);
+    });
+
+    test('compact style shortens labels to s/w', () => {
+        const view = buildUsageViewModel({providers}, {
+            now: NOW,
+            panelDisplayModes: ['claude-session', 'claude-weekly'],
+            panelLabelStyle: 'compact',
+        });
+
+        expect(view.panelGroups).toEqual([
+            {providerKey: 'claude', providerName: 'Claude', items: [
+                {key: 'claude-session', label: 's', percentText: '60%', dotColor: 'yellow'},
+                {key: 'claude-weekly', label: 'w', percentText: '25%', dotColor: 'red'},
+            ]},
+        ]);
+    });
+
+    test('used mode shows 100 - remaining while status color still tracks remaining', () => {
+        const view = buildUsageViewModel({providers}, {
+            now: NOW,
+            panelDisplayModes: ['codex-weekly'],
+            panelPercentMode: 'used',
+        });
+
+        expect(view.panelGroups).toEqual([
+            {providerKey: 'codex', providerName: 'Codex', items: [
+                {key: 'codex-weekly', label: 'Week', percentText: '9%', dotColor: 'green'},
+            ]},
+        ]);
+    });
+
+    test('renders metrics in canonical order regardless of stored order', () => {
+        const view = buildUsageViewModel({providers}, {
+            now: NOW,
+            panelDisplayModes: ['claude-session', 'codex-session'],
+        });
+
+        expect(view.panelGroups.map((g) => g.providerKey)).toEqual(['codex', 'claude']);
+    });
+
+    test('explicitly empty selection shows nothing', () => {
+        const view = buildUsageViewModel({providers}, {now: NOW, panelDisplayModes: []});
+        expect(view.panelGroups).toEqual([]);
+    });
+
+    test('selection with only unknown keys falls back to all metrics', () => {
+        const view = buildUsageViewModel({providers}, {
+            now: NOW,
+            panelDisplayModes: ['stale-key', 'another-stale-key'],
+        });
+
+        expect(view.panelGroups).toHaveLength(2);
+        expect(view.panelGroups.flatMap((g) => g.items)).toHaveLength(4);
+    });
+
+    test('missing provider data renders placeholder with red status', () => {
+        const view = buildUsageViewModel({providers: {}}, {
+            now: NOW,
+            panelDisplayModes: ['claude-session'],
+        });
+
+        expect(view.panelGroups).toEqual([
+            {providerKey: 'claude', providerName: 'Claude', items: [
+                {key: 'claude-session', label: 'Session', percentText: '--', dotColor: 'red'},
+            ]},
+        ]);
+    });
+
+    test('null summary produces no panel groups', () => {
+        const view = buildUsageViewModel(null, {now: NOW});
+        expect(view.panelGroups).toEqual([]);
+    });
+});
+
 describe('formatRelativeTime', () => {
     test('formats hours and minutes', () => {
         const reset = '2026-02-09T12:18:00.000Z';
