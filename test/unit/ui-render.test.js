@@ -1,6 +1,6 @@
 import {describe, expect, test} from 'bun:test';
 
-import {buildUsageViewModel, formatRelativeTime, getDotColor, PANEL_LABEL_MODES} from '../../shared/ui/render.js';
+import {buildUsageViewModel, formatRelativeTime, getDotColor, PANEL_ITEMS, PANEL_LABEL_MODES} from '../../shared/ui/render.js';
 
 const NOW = new Date('2026-02-09T10:00:00Z').getTime();
 
@@ -194,6 +194,89 @@ describe('buildUsageViewModel', () => {
             providers: {},
         }, {now: NOW, panelLabelMode: 'unknown-mode'});
         expect(view.panelLabel).toBe('42%');
+    });
+});
+
+describe('panelItems', () => {
+    const SUMMARY = {
+        minRemainingPct: 12.4,
+        providers: {
+            claude: {
+                code: 'OK',
+                data: {sessionRemainingPct: 60, weeklyRemainingPct: 25},
+            },
+            codex: {
+                code: 'OK',
+                data: {sessionRemainingPct: 73, weeklyRemainingPct: 91},
+            },
+        },
+    };
+
+    test('PANEL_ITEMS covers every panel label mode', () => {
+        expect(PANEL_ITEMS.map(item => item.key)).toEqual(PANEL_LABEL_MODES);
+    });
+
+    test('multiple items are labeled and joined', () => {
+        const view = buildUsageViewModel(SUMMARY, {
+            now: NOW,
+            panelItems: ['claude-session', 'codex-session'],
+        });
+        expect(view.panelLabel).toBe('C 60% · X 73%');
+    });
+
+    test('single item stays unlabeled', () => {
+        const view = buildUsageViewModel(SUMMARY, {
+            now: NOW,
+            panelItems: ['claude-weekly'],
+        });
+        expect(view.panelLabel).toBe('25%');
+    });
+
+    test('panelShowLabels false drops labels', () => {
+        const view = buildUsageViewModel(SUMMARY, {
+            now: NOW,
+            panelItems: ['claude-session', 'codex-weekly'],
+            panelShowLabels: false,
+        });
+        expect(view.panelLabel).toBe('60% · 91%');
+    });
+
+    test('min mixes with provider items', () => {
+        const view = buildUsageViewModel(SUMMARY, {
+            now: NOW,
+            panelItems: ['min', 'codex-session'],
+        });
+        expect(view.panelLabel).toBe('Min 12% · X 73%');
+    });
+
+    test('empty list renders a placeholder', () => {
+        const view = buildUsageViewModel(SUMMARY, {now: NOW, panelItems: []});
+        expect(view.panelLabel).toBe('--');
+    });
+
+    test('unknown keys are ignored', () => {
+        const view = buildUsageViewModel(SUMMARY, {
+            now: NOW,
+            panelItems: ['bogus', 'claude-session'],
+        });
+        expect(view.panelLabel).toBe('60%');
+    });
+
+    test('missing provider data renders -- per item', () => {
+        const view = buildUsageViewModel({minRemainingPct: 42, providers: {}}, {
+            now: NOW,
+            panelItems: ['claude-session', 'codex-session'],
+        });
+        expect(view.panelLabel).toBe('C -- · X --');
+    });
+
+    test('panelItems takes precedence over panelLabelMode', () => {
+        const view = buildUsageViewModel(SUMMARY, {
+            now: NOW,
+            panelItems: ['codex-weekly'],
+            panelLabelMode: 'claude-session',
+        });
+        expect(view.panelLabel).toBe('91%');
     });
 });
 

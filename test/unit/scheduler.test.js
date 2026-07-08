@@ -69,6 +69,75 @@ describe('scheduler', () => {
         scheduler.stop();
     });
 
+    test('setPollIntervalMs reschedules a running timer', async () => {
+        vi.useFakeTimers();
+        setSystemTime(new Date('2026-02-08T00:00:00.000Z'));
+
+        let calls = 0;
+        const scheduler = createScheduler({
+            providers: {
+                claude: {
+                    async getUsage() {
+                        calls += 1;
+                        return {ok: true, data: {sessionRemainingPct: 80, weeklyRemainingPct: 70}};
+                    },
+                },
+            },
+        });
+
+        scheduler.start();
+        await flushMicrotasks();
+        expect(calls).toBe(1);
+
+        scheduler.setPollIntervalMs(60_000);
+
+        vi.advanceTimersByTime(60_000);
+        await flushMicrotasks();
+        expect(calls).toBe(2);
+
+        vi.advanceTimersByTime(60_000);
+        await flushMicrotasks();
+        expect(calls).toBe(3);
+
+        // Invalid values are ignored.
+        scheduler.setPollIntervalMs(0);
+        scheduler.setPollIntervalMs(NaN);
+
+        vi.advanceTimersByTime(60_000);
+        await flushMicrotasks();
+        expect(calls).toBe(4);
+
+        scheduler.stop();
+    });
+
+    test('setPollIntervalMs before start applies to the first timer', async () => {
+        vi.useFakeTimers();
+        setSystemTime(new Date('2026-02-08T00:00:00.000Z'));
+
+        let calls = 0;
+        const scheduler = createScheduler({
+            providers: {
+                claude: {
+                    async getUsage() {
+                        calls += 1;
+                        return {ok: true, data: {sessionRemainingPct: 80, weeklyRemainingPct: 70}};
+                    },
+                },
+            },
+        });
+
+        scheduler.setPollIntervalMs(30_000);
+        scheduler.start();
+        await flushMicrotasks();
+        expect(calls).toBe(1);
+
+        vi.advanceTimersByTime(30_000);
+        await flushMicrotasks();
+        expect(calls).toBe(2);
+
+        scheduler.stop();
+    });
+
     test('keeps one in-flight request per provider and applies newest result', async () => {
         const first = deferred();
         let calls = 0;

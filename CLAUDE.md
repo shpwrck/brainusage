@@ -52,6 +52,7 @@ shared/ui/render.js      → Pure function: summary → UI view model strings
 shared/index.mjs         → Re-export surface for KDE bundling
 
 extension/extension.js   → GNOME lifecycle, wires DI, GObject/St UI
+extension/prefs.js       → libadwaita preferences window (panel metrics, poll interval, notifications)
 extension/lib/runtime/fetch.js → Soup 3.0 async HTTP wrapped in Promises (GNOME)
 extension/lib/runtime/fs.js    → Gio async file read wrapped in Promises (GNOME)
 extension/lib/{core,providers,ui}/ → VENDORED copy of shared/ at pack time (gitignored)
@@ -77,6 +78,7 @@ kde/plasma{5,6}/contents/code/ → bundled brainusage-app.mjs + runtime.js (buil
 - Schema XML lives in `extension/schemas/`, compiled automatically by `gnome-extensions pack --schema=...`
 - `this.getSettings()` in Extension subclass loads schema by `settings-schema` from `metadata.json`
 - After adding/changing schema: must repack, reinstall, and re-login
+- Keys: `panel-items` (as), `panel-show-labels` (b), `poll-interval-seconds` (i), `notifications-enabled` (b), `notify-threshold-pct` (i); `panel-label-mode` (s) is deprecated and migrated into `panel-items` on enable
 
 ## Key Patterns
 

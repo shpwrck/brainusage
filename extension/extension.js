@@ -8,13 +8,13 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-import {createScheduler, DEFAULT_POLL_INTERVAL_MS} from './lib/core/scheduler.js';
+import {createScheduler} from './lib/core/scheduler.js';
 import {createThresholdNotifier} from './lib/core/notifications.js';
 import {createClaudeProvider} from './lib/providers/claude.js';
 import {createCodexProvider} from './lib/providers/codex.js';
 import {readTextFile} from './lib/runtime/fs.js';
 import {createFetch} from './lib/runtime/fetch.js';
-import {buildUsageViewModel, PANEL_LABEL_MODES} from './lib/ui/render.js';
+import {buildUsageViewModel, PANEL_ITEMS, PANEL_LABEL_MODES} from './lib/ui/render.js';
 
 const FILL_CLASSES = {
     green: 'usage-fill-green',
@@ -83,24 +83,18 @@ function createServiceSection() {
     return {container, nameLabel, windows: [window0, window1], warningLabel};
 }
 
-const MODE_LABELS = {
-    'min': 'All (minimum)',
-    'claude-session': 'Claude Session',
-    'claude-weekly': 'Claude Weekly',
-    'codex-session': 'Codex Session',
-    'codex-weekly': 'Codex Weekly',
-};
-
 const UsageIndicator = GObject.registerClass(
 class UsageIndicator extends PanelMenu.Button {
-    _init(scheduler, settings) {
+    _init(scheduler, settings, openPrefsFn) {
         super._init(0.0, 'Usage Indicator');
 
         this._scheduler = scheduler;
         this._settings = settings;
+        this._openPrefsFn = openPrefsFn ?? null;
         this._lastSummary = null;
         this._timerSourceId = 0;
-        this._modeItems = [];
+        this._itemSwitches = [];
+        this._syncingSwitches = false;
 
         this._label = new St.Label({
             text: '--',
@@ -111,8 +105,8 @@ class UsageIndicator extends PanelMenu.Button {
         this._buildPopup();
         this._startRelativeTimeTimer();
 
-        this._settingsChangedId = this._settings.connect('changed::panel-label-mode', () => {
-            this._updateOrnaments();
+        this._settingsChangedId = this._settings.connect('changed', () => {
+            this._syncDisplaySwitches();
             this._refreshRelativeTimes();
         });
     }
@@ -163,35 +157,70 @@ class UsageIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(refreshItem);
 
         this._buildDisplaySubmenu();
+
+        const settingsItem = new PopupMenu.PopupMenuItem('Settings');
+        this._settingsItemSignalId = settingsItem.connect('activate', () => {
+            this._openPrefsFn?.();
+        });
+        this._settingsItem = settingsItem;
+        this.menu.addMenuItem(settingsItem);
     }
 
     _buildDisplaySubmenu() {
         this._displaySubmenu = new PopupMenu.PopupSubMenuMenuItem('Panel display');
-        this._modeItems = [];
+        this._itemSwitches = [];
 
-        for (const mode of PANEL_LABEL_MODES) {
-            const item = new PopupMenu.PopupMenuItem(MODE_LABELS[mode] ?? mode);
-            item._modeKey = mode;
-            item.connect('activate', () => {
-                this._settings.set_string('panel-label-mode', mode);
+        const enabledItems = this._settings.get_strv('panel-items');
+
+        for (const item of PANEL_ITEMS) {
+            const switchItem = new PopupMenu.PopupSwitchMenuItem(
+                item.label,
+                enabledItems.includes(item.key),
+            );
+            switchItem._itemKey = item.key;
+            switchItem.connect('toggled', (_item, state) => {
+                if (!this._syncingSwitches)
+                    this._setPanelItemEnabled(item.key, state);
             });
-            this._modeItems.push(item);
-            this._displaySubmenu.menu.addMenuItem(item);
+            this._itemSwitches.push(switchItem);
+            this._displaySubmenu.menu.addMenuItem(switchItem);
         }
 
-        this._updateOrnaments();
+        this._labelsSwitch = new PopupMenu.PopupSwitchMenuItem(
+            'Show metric labels',
+            this._settings.get_boolean('panel-show-labels'),
+        );
+        this._labelsSwitch.connect('toggled', (_item, state) => {
+            if (!this._syncingSwitches)
+                this._settings.set_boolean('panel-show-labels', state);
+        });
+        this._displaySubmenu.menu.addMenuItem(this._labelsSwitch);
+
         this.menu.addMenuItem(this._displaySubmenu);
     }
 
-    _updateOrnaments() {
-        const current = this._settings.get_string('panel-label-mode');
-        for (const item of this._modeItems) {
-            item.setOrnament(
-                item._modeKey === current
-                    ? PopupMenu.Ornament.DOT
-                    : PopupMenu.Ornament.NONE,
-            );
-        }
+    _setPanelItemEnabled(key, enabled) {
+        const current = new Set(this._settings.get_strv('panel-items'));
+        if (enabled)
+            current.add(key);
+        else
+            current.delete(key);
+
+        // Keep the canonical PANEL_ITEMS order regardless of toggle order.
+        const ordered = PANEL_ITEMS.map(item => item.key).filter(k => current.has(k));
+        this._settings.set_strv('panel-items', ordered);
+    }
+
+    _syncDisplaySwitches() {
+        this._syncingSwitches = true;
+
+        const enabledItems = this._settings.get_strv('panel-items');
+        for (const switchItem of this._itemSwitches)
+            switchItem.setToggleState(enabledItems.includes(switchItem._itemKey));
+
+        this._labelsSwitch?.setToggleState(this._settings.get_boolean('panel-show-labels'));
+
+        this._syncingSwitches = false;
     }
 
     _startRelativeTimeTimer() {
@@ -205,24 +234,25 @@ class UsageIndicator extends PanelMenu.Button {
         );
     }
 
+    _viewModelDeps() {
+        return {
+            now: Date.now(),
+            pollIntervalMs: this._settings.get_int('poll-interval-seconds') * 1000,
+            panelItems: this._settings.get_strv('panel-items'),
+            panelShowLabels: this._settings.get_boolean('panel-show-labels'),
+        };
+    }
+
     _refreshRelativeTimes() {
         if (!this._lastSummary)
             return;
 
-        this._applyViewModel(buildUsageViewModel(this._lastSummary, {
-            now: Date.now(),
-            pollIntervalMs: DEFAULT_POLL_INTERVAL_MS,
-            panelLabelMode: this._settings.get_string('panel-label-mode'),
-        }));
+        this._applyViewModel(buildUsageViewModel(this._lastSummary, this._viewModelDeps()));
     }
 
     render(summary) {
         this._lastSummary = summary;
-        this._applyViewModel(buildUsageViewModel(summary, {
-            now: Date.now(),
-            pollIntervalMs: DEFAULT_POLL_INTERVAL_MS,
-            panelLabelMode: this._settings.get_string('panel-label-mode'),
-        }));
+        this._applyViewModel(buildUsageViewModel(summary, this._viewModelDeps()));
     }
 
     _applyViewModel(vm) {
@@ -278,6 +308,11 @@ class UsageIndicator extends PanelMenu.Button {
             this._refreshSignalId = null;
         }
 
+        if (this._settingsItemSignalId && this._settingsItem) {
+            this._settingsItem.disconnect(this._settingsItemSignalId);
+            this._settingsItemSignalId = null;
+        }
+
         if (this._settingsChangedId && this._settings) {
             this._settings.disconnect(this._settingsChangedId);
             this._settingsChangedId = null;
@@ -290,6 +325,9 @@ class UsageIndicator extends PanelMenu.Button {
 
 export default class UsageLimitsExtension extends Extension {
     enable() {
+        this._settings = this.getSettings();
+        this._migrateLegacySettings();
+
         this._fetchRuntime = createFetch();
         const fetchImpl = this._fetchRuntime.fetch;
         const fileReader = readTextFile;
@@ -303,23 +341,45 @@ export default class UsageLimitsExtension extends Extension {
             readTextFile: fileReader,
         });
         this._thresholdNotifier = createThresholdNotifier({
+            thresholdPct: () => this._settings?.get_int('notify-threshold-pct') ?? 20,
             notifyFn: (title, body) => {
-                Main.notify(title, body);
+                if (this._settings?.get_boolean('notifications-enabled'))
+                    Main.notify(title, body);
             },
         });
 
         this._scheduler = createScheduler({
             providers: {claude, codex},
+            pollIntervalMs: this._settings.get_int('poll-interval-seconds') * 1000,
             onUpdate: (summary) => {
                 this._indicator?.render(summary);
                 this._thresholdNotifier?.evaluate(summary);
             },
         });
 
-        this._settings = this.getSettings();
-        this._indicator = new UsageIndicator(this._scheduler, this._settings);
+        this._pollSettingId = this._settings.connect('changed::poll-interval-seconds', () => {
+            this._scheduler?.setPollIntervalMs(this._settings.get_int('poll-interval-seconds') * 1000);
+        });
+
+        this._indicator = new UsageIndicator(
+            this._scheduler,
+            this._settings,
+            () => this.openPreferences(),
+        );
         Main.panel.addToStatusArea(this.uuid, this._indicator);
         this._scheduler.start();
+    }
+
+    _migrateLegacySettings() {
+        // Older versions stored a single metric in panel-label-mode; carry it
+        // over once, unless the user has already customized panel-items.
+        const legacy = this._settings.get_user_value('panel-label-mode');
+        if (!legacy || this._settings.get_user_value('panel-items'))
+            return;
+
+        const mode = this._settings.get_string('panel-label-mode');
+        if (PANEL_LABEL_MODES.includes(mode) && mode !== 'min')
+            this._settings.set_strv('panel-items', [mode]);
     }
 
     disable() {
@@ -330,8 +390,15 @@ export default class UsageLimitsExtension extends Extension {
         this._fetchRuntime?.dispose();
         this._fetchRuntime = null;
 
-        if (!this._indicator)
+        if (this._pollSettingId && this._settings) {
+            this._settings.disconnect(this._pollSettingId);
+            this._pollSettingId = null;
+        }
+
+        if (!this._indicator) {
+            this._settings = null;
             return;
+        }
 
         this._indicator.destroy();
         this._indicator = null;

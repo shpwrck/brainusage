@@ -31,7 +31,7 @@ function createNetworkFailureResult() {
 
 export function createScheduler(options = {}) {
     const providers = normalizeProviders(options.providers);
-    const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+    let pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     const nowIso = options.nowIso ?? (() => new Date().toISOString());
     const onUpdate = options.onUpdate ?? null;
     const setIntervalFn = options.setIntervalFn ?? globalThis.setInterval;
@@ -112,10 +112,25 @@ export function createScheduler(options = {}) {
         return computeSummary(providerStates);
     }
 
+    function setPollIntervalMs(ms) {
+        if (!Number.isFinite(ms) || ms <= 0 || ms === pollIntervalMs)
+            return;
+
+        pollIntervalMs = ms;
+
+        if (timerId) {
+            clearIntervalFn(timerId);
+            timerId = setIntervalFn(() => {
+                void refresh();
+            }, pollIntervalMs);
+        }
+    }
+
     return {
         start,
         stop,
         refresh,
         getSummary,
+        setPollIntervalMs,
     };
 }

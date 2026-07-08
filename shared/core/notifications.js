@@ -44,13 +44,19 @@ function createWindowState(resetPeriod) {
 }
 
 export function createThresholdNotifier(options = {}) {
-    const thresholdPct = options.thresholdPct ?? DEFAULT_THRESHOLD_PCT;
+    const thresholdOption = options.thresholdPct ?? DEFAULT_THRESHOLD_PCT;
+    const resolveThresholdPct = typeof thresholdOption === 'function'
+        ? thresholdOption
+        : () => thresholdOption;
     const notifyFn = typeof options.notifyFn === 'function'
         ? options.notifyFn
         : () => {};
     const state = new Map();
 
     function evaluate(summary) {
+        const resolved = resolveThresholdPct();
+        const thresholdPct = Number.isFinite(resolved) ? resolved : DEFAULT_THRESHOLD_PCT;
+
         for (const provider of PROVIDERS) {
             const providerData = summary?.providers?.[provider.key]?.data;
             if (!providerData)

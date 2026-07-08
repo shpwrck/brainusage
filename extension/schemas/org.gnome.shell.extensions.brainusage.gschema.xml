@@ -4,10 +4,41 @@
           path="/org/gnome/shell/extensions/brainusage/">
     <key name="panel-label-mode" type="s">
       <default>'min'</default>
-      <summary>Which metric to show in the panel</summary>
+      <summary>Which metric to show in the panel (deprecated)</summary>
       <description>
+        Deprecated in favor of panel-items; kept for migration.
         Options: min, claude-session, claude-weekly, codex-session, codex-weekly
       </description>
+    </key>
+    <key name="panel-items" type="as">
+      <default>['min']</default>
+      <summary>Metrics shown in the panel, in order</summary>
+      <description>
+        Any of: min, claude-session, claude-weekly, codex-session, codex-weekly.
+        An empty list shows a placeholder.
+      </description>
+    </key>
+    <key name="panel-show-labels" type="b">
+      <default>true</default>
+      <summary>Prefix panel metrics with short labels</summary>
+      <description>
+        When more than one metric is shown, prefix each value with a short
+        label (e.g. "C 60% · X 73%"). A single metric is always unlabeled.
+      </description>
+    </key>
+    <key name="poll-interval-seconds" type="i">
+      <range min="60" max="3600"/>
+      <default>180</default>
+      <summary>Seconds between usage API polls</summary>
+    </key>
+    <key name="notifications-enabled" type="b">
+      <default>true</default>
+      <summary>Show a notification when usage drops below the threshold</summary>
+    </key>
+    <key name="notify-threshold-pct" type="i">
+      <range min="1" max="99"/>
+      <default>20</default>
+      <summary>Remaining-usage percentage that triggers a notification</summary>
     </key>
   </schema>
 </schemalist>

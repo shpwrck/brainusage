@@ -2,6 +2,18 @@ const VERSION = 'brainusage 1.0.1';
 
 export const PANEL_LABEL_MODES = ['min', 'claude-session', 'claude-weekly', 'codex-session', 'codex-weekly'];
 
+export const PANEL_ITEMS = [
+    {key: 'min', label: 'Overall minimum', shortLabel: 'Min'},
+    {key: 'claude-session', label: 'Claude session', shortLabel: 'C'},
+    {key: 'claude-weekly', label: 'Claude weekly', shortLabel: 'Cw'},
+    {key: 'codex-session', label: 'Codex session', shortLabel: 'X'},
+    {key: 'codex-weekly', label: 'Codex weekly', shortLabel: 'Xw'},
+];
+
+const PANEL_ITEM_SHORT_LABELS = {};
+for (const item of PANEL_ITEMS)
+    PANEL_ITEM_SHORT_LABELS[item.key] = item.shortLabel;
+
 function getPanelLabelValue(summary, mode) {
     if (mode === 'min' || !mode)
         return summary?.minRemainingPct;
@@ -17,6 +29,24 @@ function getPanelLabelValue(summary, mode) {
         case 'codex-weekly':   return providers.codex?.data?.weeklyRemainingPct;
         default: return summary?.minRemainingPct;
     }
+}
+
+function buildPanelLabel(summary, deps) {
+    if (!Array.isArray(deps.panelItems))
+        return formatPercent(getPanelLabelValue(summary, deps.panelLabelMode ?? 'min'));
+
+    const items = deps.panelItems.filter(key => key in PANEL_ITEM_SHORT_LABELS);
+    if (items.length === 0)
+        return '--';
+
+    const showLabels = (deps.panelShowLabels ?? true) && items.length > 1;
+
+    return items
+        .map(key => {
+            const pct = formatPercent(getPanelLabelValue(summary, key));
+            return showLabels ? `${PANEL_ITEM_SHORT_LABELS[key]} ${pct}` : pct;
+        })
+        .join(' · ');
 }
 
 function formatPercent(value) {
@@ -155,13 +185,12 @@ export function buildUsageViewModel(summary, deps = {}) {
     const now = deps.now ?? Date.now();
     const version = deps.version ?? VERSION;
     const pollIntervalMs = deps.pollIntervalMs ?? 180_000;
-    const panelLabelMode = deps.panelLabelMode ?? 'min';
 
     const claude = summary?.providers?.claude ?? null;
     const codex = summary?.providers?.codex ?? null;
 
     return {
-        panelLabel: formatPercent(getPanelLabelValue(summary, panelLabelMode)),
+        panelLabel: buildPanelLabel(summary, deps),
         services: [
             buildServiceViewModel('Codex', codex?.data, codex?.code, now),
             buildServiceViewModel('Claude', claude?.data, claude?.code, now),

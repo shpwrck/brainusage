@@ -27,6 +27,64 @@ function createSummary(overrides = {}) {
 }
 
 describe('threshold notifications', () => {
+    test('thresholdPct can be a function and is re-read on every evaluate', () => {
+        const notifications = [];
+        let threshold = 20;
+        const notifier = createThresholdNotifier({
+            thresholdPct: () => threshold,
+            notifyFn: (title, body) => {
+                notifications.push({title, body});
+            },
+        });
+
+        notifier.evaluate(createSummary());
+        expect(notifications).toHaveLength(0);
+
+        // Raising the threshold makes the next drop (80 -> 55) cross it.
+        threshold = 70;
+        notifier.evaluate(createSummary({
+            providers: {
+                claude: {
+                    data: {
+                        sessionRemainingPct: 55,
+                        weeklyRemainingPct: 75,
+                        sessionResetsAtIso: '2026-02-09T10:00:00.000Z',
+                        weeklyResetsAtIso: '2026-02-10T10:00:00.000Z',
+                    },
+                },
+            },
+        }));
+
+        expect(notifications).toHaveLength(1);
+        expect(notifications[0].title).toBe('Claude session low');
+    });
+
+    test('non-finite threshold from function falls back to default', () => {
+        const notifications = [];
+        const notifier = createThresholdNotifier({
+            thresholdPct: () => NaN,
+            notifyFn: (title, body) => {
+                notifications.push({title, body});
+            },
+        });
+
+        notifier.evaluate(createSummary());
+        notifier.evaluate(createSummary({
+            providers: {
+                claude: {
+                    data: {
+                        sessionRemainingPct: 19,
+                        weeklyRemainingPct: 75,
+                        sessionResetsAtIso: '2026-02-09T10:00:00.000Z',
+                        weeklyResetsAtIso: '2026-02-10T10:00:00.000Z',
+                    },
+                },
+            },
+        }));
+
+        expect(notifications).toHaveLength(1);
+    });
+
     test('notifies once for each provider/window when crossing below 20%', () => {
         const notifications = [];
         const notifier = createThresholdNotifier({
