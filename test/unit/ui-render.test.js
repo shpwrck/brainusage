@@ -280,6 +280,87 @@ describe('panelItems', () => {
     });
 });
 
+describe('panelGroups', () => {
+    const SUMMARY = {
+        minRemainingPct: 12.4,
+        providers: {
+            claude: {
+                code: 'OK',
+                data: {sessionRemainingPct: 60, weeklyRemainingPct: 25},
+            },
+            codex: {
+                code: 'OK',
+                data: {sessionRemainingPct: 73, weeklyRemainingPct: 91},
+            },
+        },
+    };
+
+    test('groups provider metrics with window labels and health colors', () => {
+        const view = buildUsageViewModel(SUMMARY, {
+            now: NOW,
+            panelItems: ['claude-session', 'claude-weekly', 'codex-session'],
+        });
+
+        expect(view.panelGroups).toEqual([
+            {providerKey: 'claude', items: [
+                {key: 'claude-session', label: 'Session', percentText: '60%', dotColor: 'yellow'},
+                {key: 'claude-weekly', label: 'Week', percentText: '25%', dotColor: 'red'},
+            ]},
+            {providerKey: 'codex', items: [
+                {key: 'codex-session', label: 'Session', percentText: '73%', dotColor: 'green'},
+            ]},
+        ]);
+    });
+
+    test('min renders as its own group without a provider', () => {
+        const view = buildUsageViewModel(SUMMARY, {
+            now: NOW,
+            panelItems: ['min', 'codex-session'],
+        });
+
+        expect(view.panelGroups[0]).toEqual({providerKey: null, items: [
+            {key: 'min', label: 'Min', percentText: '12%', dotColor: 'red'},
+        ]});
+    });
+
+    test('panelShowLabels false empties item labels but keeps values', () => {
+        const view = buildUsageViewModel(SUMMARY, {
+            now: NOW,
+            panelItems: ['claude-session'],
+            panelShowLabels: false,
+        });
+
+        expect(view.panelGroups).toEqual([
+            {providerKey: 'claude', items: [
+                {key: 'claude-session', label: '', percentText: '60%', dotColor: 'yellow'},
+            ]},
+        ]);
+    });
+
+    test('unknown keys are skipped and empty selection yields no groups', () => {
+        expect(buildUsageViewModel(SUMMARY, {now: NOW, panelItems: ['bogus']}).panelGroups).toEqual([]);
+        expect(buildUsageViewModel(SUMMARY, {now: NOW, panelItems: []}).panelGroups).toEqual([]);
+    });
+
+    test('missing provider data renders placeholder with red status', () => {
+        const view = buildUsageViewModel({providers: {}}, {
+            now: NOW,
+            panelItems: ['codex-session'],
+        });
+
+        expect(view.panelGroups).toEqual([
+            {providerKey: 'codex', items: [
+                {key: 'codex-session', label: 'Session', percentText: '--', dotColor: 'red'},
+            ]},
+        ]);
+    });
+
+    test('null summary and legacy panelLabelMode callers get no groups', () => {
+        expect(buildUsageViewModel(null, {now: NOW}).panelGroups).toEqual([]);
+        expect(buildUsageViewModel(SUMMARY, {now: NOW, panelLabelMode: 'min'}).panelGroups).toEqual([]);
+    });
+});
+
 describe('formatRelativeTime', () => {
     test('formats hours and minutes', () => {
         const reset = '2026-02-09T12:18:00.000Z';

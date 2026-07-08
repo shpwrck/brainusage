@@ -85,3 +85,36 @@
     color: #f87171;
     margin-top: 4px;
 }
+
+/* Panel — text colors inherit the shell theme so light top bars stay legible;
+   only the health status colors are explicit. */
+.usage-panel-box {
+    spacing: 8px;
+}
+.usage-panel-group {
+    spacing: 5px;
+}
+.usage-panel-metric {
+    spacing: 2px;
+}
+.usage-panel-icon {
+    icon-size: 14px;
+}
+.usage-panel-icon-claude {
+    color: #d97757;
+}
+.usage-panel-context {
+    font-size: 11px;
+}
+.usage-panel-value {
+    font-weight: 700;
+}
+.usage-value-green {
+    color: #22c55e;
+}
+.usage-value-yellow {
+    color: #eab308;
+}
+.usage-value-red {
+    color: #ef4444;
+}

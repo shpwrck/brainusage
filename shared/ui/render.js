@@ -3,11 +3,11 @@ const VERSION = 'brainusage 1.0.1';
 export const PANEL_LABEL_MODES = ['min', 'claude-session', 'claude-weekly', 'codex-session', 'codex-weekly'];
 
 export const PANEL_ITEMS = [
-    {key: 'min', label: 'Overall minimum', shortLabel: 'Min'},
-    {key: 'claude-session', label: 'Claude session', shortLabel: 'C'},
-    {key: 'claude-weekly', label: 'Claude weekly', shortLabel: 'Cw'},
-    {key: 'codex-session', label: 'Codex session', shortLabel: 'X'},
-    {key: 'codex-weekly', label: 'Codex weekly', shortLabel: 'Xw'},
+    {key: 'min', label: 'Overall minimum', shortLabel: 'Min', providerKey: null, providerName: null, windowLabel: 'Min'},
+    {key: 'claude-session', label: 'Claude session', shortLabel: 'C', providerKey: 'claude', providerName: 'Claude', windowLabel: 'Session'},
+    {key: 'claude-weekly', label: 'Claude weekly', shortLabel: 'Cw', providerKey: 'claude', providerName: 'Claude', windowLabel: 'Week'},
+    {key: 'codex-session', label: 'Codex session', shortLabel: 'X', providerKey: 'codex', providerName: 'Codex', windowLabel: 'Session'},
+    {key: 'codex-weekly', label: 'Codex weekly', shortLabel: 'Xw', providerKey: 'codex', providerName: 'Codex', windowLabel: 'Week'},
 ];
 
 const PANEL_ITEM_SHORT_LABELS = {};
@@ -47,6 +47,42 @@ function buildPanelLabel(summary, deps) {
             return showLabels ? `${PANEL_ITEM_SHORT_LABELS[key]} ${pct}` : pct;
         })
         .join(' · ');
+}
+
+// Structured form of the panel label for widget-based renderers (GNOME):
+// items grouped per provider so each group can carry the provider logo, with
+// a health color per value. The joined-string panelLabel remains for KDE.
+function buildPanelGroups(summary, deps) {
+    if (!summary || !Array.isArray(deps.panelItems))
+        return [];
+
+    const showLabels = deps.panelShowLabels ?? true;
+    const groups = [];
+    const groupByProvider = new Map();
+
+    for (const key of deps.panelItems) {
+        const item = PANEL_ITEMS.find((entry) => entry.key === key);
+        if (!item)
+            continue;
+
+        const groupKey = item.providerKey ?? item.key;
+        let group = groupByProvider.get(groupKey);
+        if (!group) {
+            group = {providerKey: item.providerKey, items: []};
+            groupByProvider.set(groupKey, group);
+            groups.push(group);
+        }
+
+        const pct = getPanelLabelValue(summary, key);
+        group.items.push({
+            key,
+            label: showLabels ? item.windowLabel : '',
+            percentText: formatPercent(pct),
+            dotColor: getDotColor(pct),
+        });
+    }
+
+    return groups;
 }
 
 function formatPercent(value) {
@@ -191,6 +227,7 @@ export function buildUsageViewModel(summary, deps = {}) {
 
     return {
         panelLabel: buildPanelLabel(summary, deps),
+        panelGroups: buildPanelGroups(summary, deps),
         services: [
             buildServiceViewModel('Codex', codex?.data, codex?.code, now),
             buildServiceViewModel('Claude', claude?.data, claude?.code, now),

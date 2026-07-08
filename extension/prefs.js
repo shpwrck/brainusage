@@ -36,7 +36,9 @@ export default class BrainUsagePreferences extends ExtensionPreferences {
         for (const item of PANEL_ITEMS) {
             const row = new Adw.SwitchRow({
                 title: item.label,
-                subtitle: `Shown as “${item.shortLabel}” when labels are enabled`,
+                subtitle: item.providerName
+                    ? `Shown as “${item.windowLabel}” next to the ${item.providerName} logo`
+                    : 'Lowest percentage across all windows',
                 active: settings.get_strv('panel-items').includes(item.key),
             });
             row.connect('notify::active', () => {

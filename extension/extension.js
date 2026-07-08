@@ -1,4 +1,5 @@
 import GLib from 'gi://GLib';
+import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
@@ -21,6 +22,77 @@ const FILL_CLASSES = {
     yellow: 'usage-fill-yellow',
     red: 'usage-fill-red',
 };
+
+const PANEL_VALUE_CLASSES = {
+    green: 'usage-panel-value usage-value-green',
+    yellow: 'usage-panel-value usage-value-yellow',
+    red: 'usage-panel-value usage-value-red',
+};
+
+const StayOpenSwitchMenuItem = GObject.registerClass(
+class StayOpenSwitchMenuItem extends PopupMenu.PopupSwitchMenuItem {
+    activate(_event) {
+        // Skipping super.activate() suppresses the 'activate' emission whose
+        // menu-level handler closes the popup, so several switches can be
+        // toggled in a row. toggle() still updates ATK checked state.
+        if (this._switch?.mapped)
+            this.toggle();
+    }
+});
+
+function loadProviderIcons(extensionPath) {
+    const iconFor = (name) => new Gio.FileIcon({
+        file: Gio.File.new_for_path(
+            GLib.build_filenamev([extensionPath, 'assets', `${name}-symbolic.svg`]),
+        ),
+    });
+
+    return {codex: iconFor('codex'), claude: iconFor('claude')};
+}
+
+function createPanelGroupWidgets(group, providerIcon) {
+    const box = new St.BoxLayout({
+        style_class: 'usage-panel-group',
+        y_align: Clutter.ActorAlign.CENTER,
+    });
+
+    if (providerIcon) {
+        const icon = new St.Icon({
+            gicon: providerIcon,
+            style_class: `usage-panel-icon usage-panel-icon-${group.providerKey}`,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        box.add_child(icon);
+    }
+
+    const valueLabels = new Map();
+    for (const item of group.items) {
+        const metricBox = new St.BoxLayout({
+            style_class: 'usage-panel-metric',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        if (item.label) {
+            const contextLabel = new St.Label({
+                text: item.label,
+                style_class: 'usage-panel-context',
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+            // Dim via actor opacity so the label adapts to any shell theme.
+            contextLabel.opacity = 170;
+            metricBox.add_child(contextLabel);
+        }
+        const valueLabel = new St.Label({
+            text: item.percentText,
+            style_class: PANEL_VALUE_CLASSES[item.dotColor] ?? PANEL_VALUE_CLASSES.red,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        metricBox.add_child(valueLabel);
+        box.add_child(metricBox);
+        valueLabels.set(item.key, valueLabel);
+    }
+
+    return {box, valueLabels};
+}
 
 function createWindowWidgets() {
     const box = new St.BoxLayout({
@@ -85,22 +157,26 @@ function createServiceSection() {
 
 const UsageIndicator = GObject.registerClass(
 class UsageIndicator extends PanelMenu.Button {
-    _init(scheduler, settings, openPrefsFn) {
+    _init(scheduler, settings, providerIcons, openPrefsFn) {
         super._init(0.0, 'Usage Indicator');
 
         this._scheduler = scheduler;
         this._settings = settings;
+        this._providerIcons = providerIcons;
         this._openPrefsFn = openPrefsFn ?? null;
         this._lastSummary = null;
         this._timerSourceId = 0;
         this._itemSwitches = [];
         this._syncingSwitches = false;
+        this._panelShapeKey = null;
+        this._panelValueLabels = new Map();
 
-        this._label = new St.Label({
-            text: '--',
+        this._panelBox = new St.BoxLayout({
+            style_class: 'usage-panel-box',
             y_align: Clutter.ActorAlign.CENTER,
         });
-        this.add_child(this._label);
+        this.add_child(this._panelBox);
+        this._applyPanelGroups({panelGroups: []});
 
         this._buildPopup();
         this._startRelativeTimeTimer();
@@ -173,7 +249,7 @@ class UsageIndicator extends PanelMenu.Button {
         const enabledItems = this._settings.get_strv('panel-items');
 
         for (const item of PANEL_ITEMS) {
-            const switchItem = new PopupMenu.PopupSwitchMenuItem(
+            const switchItem = new StayOpenSwitchMenuItem(
                 item.label,
                 enabledItems.includes(item.key),
             );
@@ -186,7 +262,7 @@ class UsageIndicator extends PanelMenu.Button {
             this._displaySubmenu.menu.addMenuItem(switchItem);
         }
 
-        this._labelsSwitch = new PopupMenu.PopupSwitchMenuItem(
+        this._labelsSwitch = new StayOpenSwitchMenuItem(
             'Show metric labels',
             this._settings.get_boolean('panel-show-labels'),
         );
@@ -255,8 +331,52 @@ class UsageIndicator extends PanelMenu.Button {
         this._applyViewModel(buildUsageViewModel(summary, this._viewModelDeps()));
     }
 
+    _applyPanelGroups(vm) {
+        // The widget tree is rebuilt only when the panel's shape changes
+        // (selection or labels toggle); routine refreshes update text in place.
+        const shapeKey = vm.panelGroups
+            .map((group) => `${group.providerKey ?? 'min'}:${group.items.map((item) => `${item.key}=${item.label}`).join(',')}`)
+            .join('|');
+
+        if (shapeKey !== this._panelShapeKey) {
+            this._panelShapeKey = shapeKey;
+            this._panelValueLabels = new Map();
+            this._panelBox.destroy_all_children();
+
+            if (vm.panelGroups.length === 0) {
+                this._panelBox.add_child(new St.Label({
+                    text: '--',
+                    y_align: Clutter.ActorAlign.CENTER,
+                }));
+                return;
+            }
+
+            for (const group of vm.panelGroups) {
+                const {box, valueLabels} = createPanelGroupWidgets(
+                    group,
+                    group.providerKey ? this._providerIcons[group.providerKey] : null,
+                );
+                this._panelBox.add_child(box);
+                for (const [key, label] of valueLabels)
+                    this._panelValueLabels.set(key, label);
+            }
+            return;
+        }
+
+        for (const group of vm.panelGroups) {
+            for (const item of group.items) {
+                const label = this._panelValueLabels.get(item.key);
+                if (!label)
+                    continue;
+
+                label.text = item.percentText;
+                label.style_class = PANEL_VALUE_CLASSES[item.dotColor] ?? PANEL_VALUE_CLASSES.red;
+            }
+        }
+    }
+
     _applyViewModel(vm) {
-        this._label.text = vm.panelLabel;
+        this._applyPanelGroups(vm);
 
         const sections = [this._codexSection, this._claudeSection];
 
@@ -364,6 +484,7 @@ export default class UsageLimitsExtension extends Extension {
         this._indicator = new UsageIndicator(
             this._scheduler,
             this._settings,
+            loadProviderIcons(this.path),
             () => this.openPreferences(),
         );
         Main.panel.addToStatusArea(this.uuid, this._indicator);

@@ -20,9 +20,10 @@ Extensions app. Everything is stored in GSettings
 - `panel-items` (string array) — which metrics appear in the top bar, in order.
   Any of `min`, `claude-session`, `claude-weekly`, `codex-session`,
   `codex-weekly`. Default `['min']`.
-- `panel-show-labels` (bool) — when more than one metric is shown, prefix each
-  value with a short label (`Min`, `C`, `Cw`, `X`, `Xw`), e.g. `C 60% · X 73%`.
-  A single metric is always shown bare. Default `true`.
+- `panel-show-labels` (bool) — prefix each value with its window label
+  (`Session`, `Week`, `Min`). Provider metrics always carry the provider logo,
+  and every value is colored by health status (green / yellow / red), e.g.
+  `[Claude logo] Session 60% · [OpenAI logo] Session 73%`. Default `true`.
 - `poll-interval-seconds` (int, 60–3600) — seconds between usage polls.
   Default `180`.
 - `notifications-enabled` (bool) — toggle low-usage notifications. Default `true`.
