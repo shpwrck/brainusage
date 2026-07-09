@@ -84,6 +84,26 @@ describe('Codex provider', () => {
         });
     });
 
+    test('reads window duration from the raw limit_window_seconds field', async () => {
+        const provider = createCodexProvider({
+            readTextFile: async () => JSON.stringify({
+                tokens: {access_token: 'access-token', refresh_token: 'refresh-token'},
+            }),
+            fetch: async () => createJsonResponse(200, {
+                rate_limit: {
+                    primary_window: {used_percent: 42, reset_at: 1_770_508_800, limit_window_seconds: 18_000},
+                    secondary_window: {used_percent: 64, reset_at: 1_770_768_000, limit_window_seconds: 604_800},
+                },
+            }),
+        });
+
+        const result = await provider.getUsage();
+
+        expect(result.ok).toBe(true);
+        expect(result.data.sessionWindowMs).toBe(18_000 * 1000);
+        expect(result.data.weeklyWindowMs).toBe(604_800 * 1000);
+    });
+
     test('refreshes on usage 401 and retries once', async () => {
         let usageCalls = 0;
 

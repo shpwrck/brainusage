@@ -143,7 +143,10 @@ export function computeUtilizationPct(remainingPct, resetsAtIso, windowMs, now) 
         return null;
 
     const resetsAt = new Date(resetsAtIso).getTime();
-    if (Number.isNaN(resetsAt))
+    // A reset time at or before now means the stored window has already expired
+    // (stale data between polls); its pace is no longer current, so report it as
+    // unknown rather than projecting the old window's usage.
+    if (Number.isNaN(resetsAt) || resetsAt <= now)
         return null;
 
     const elapsedFraction = Math.min(1, (windowMs - (resetsAt - now)) / windowMs);

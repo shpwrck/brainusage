@@ -451,6 +451,13 @@ describe('computeUtilizationPct', () => {
         expect(computeUtilizationPct(90, almostFull, FIVE_HOURS_MS, NOW)).toBeNull();
     });
 
+    test('returns null once the window has already reset', () => {
+        // Stale data whose reset time is in the past must not project pace.
+        const past = '2026-02-09T09:00:00.000Z';
+        expect(computeUtilizationPct(40, past, FIVE_HOURS_MS, NOW)).toBeNull();
+        expect(computeUtilizationPct(40, new Date(NOW).toISOString(), FIVE_HOURS_MS, NOW)).toBeNull();
+    });
+
     test('returns null without a window duration or reset time', () => {
         expect(computeUtilizationPct(40, HALFWAY_RESET, null, NOW)).toBeNull();
         expect(computeUtilizationPct(40, null, FIVE_HOURS_MS, NOW)).toBeNull();

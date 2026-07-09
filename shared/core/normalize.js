@@ -19,10 +19,9 @@ function unixSecondsToIso(value) {
     return new Date(seconds * 1000).toISOString();
 }
 
-// Usage windows are fixed durations: a rolling 5-hour session window and a
-// 7-day weekly window. Both Claude and Codex share this cadence. Codex's
-// wham/usage payload doesn't carry a window duration, so these are the
-// fallback when it isn't provided explicitly.
+// Usage windows share a fixed cadence: a rolling 5-hour session window and a
+// 7-day weekly window. Used as the last-resort fallback when a payload doesn't
+// report the window length in any known field.
 const SESSION_WINDOW_MS = 5 * 60 * 60 * 1000;
 const WEEKLY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -34,13 +33,25 @@ function minutesToMs(value) {
     return minutes * 60_000;
 }
 
-// Prefer an explicit window duration from the payload; fall back to the known
-// fixed duration when the window exists but doesn't report one.
+function secondsToMs(value) {
+    const seconds = Number(value);
+    if (!Number.isFinite(seconds) || seconds <= 0)
+        return null;
+
+    return seconds * 1000;
+}
+
+// Prefer an explicit window duration from the payload. Codex's raw
+// /backend-api/wham/usage exposes it as `limit_window_seconds`; its own mapped
+// client model calls that `window_minutes`. Fall back to the known fixed
+// duration only when the window exists but reports neither.
 function windowMsFor(window, fallbackMs) {
     if (!window)
         return null;
 
-    return minutesToMs(window.window_minutes) ?? fallbackMs;
+    return minutesToMs(window.window_minutes)
+        ?? secondsToMs(window.limit_window_seconds)
+        ?? fallbackMs;
 }
 
 export function normalizeClaudeUsage(payload) {
