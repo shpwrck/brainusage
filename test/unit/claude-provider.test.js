@@ -89,6 +89,8 @@ describe('Claude provider', () => {
             weeklyRemainingPct: 25,
             sessionResetsAtIso: '2026-02-09T00:00:00.000Z',
             weeklyResetsAtIso: '2026-02-12T00:00:00.000Z',
+            sessionWindowMs: 5 * 60 * 60 * 1000,
+            weeklyWindowMs: 7 * 24 * 60 * 60 * 1000,
         });
         expect(calls.map((entry) => entry.url)).toEqual([
             claudeProviderConfig.REFRESH_ENDPOINT,

@@ -59,10 +59,12 @@ describe('Codex provider', () => {
                         primary_window: {
                             used_percent: 42,
                             reset_at: 1_770_508_800,
+                            window_minutes: 300,
                         },
                         secondary_window: {
                             used_percent: 64,
                             reset_at: 1_770_768_000,
+                            window_minutes: 10_080,
                         },
                     },
                 });
@@ -77,6 +79,8 @@ describe('Codex provider', () => {
             weeklyRemainingPct: 36,
             sessionResetsAtIso: '2026-02-08T00:00:00.000Z',
             weeklyResetsAtIso: '2026-02-11T00:00:00.000Z',
+            sessionWindowMs: 300 * 60_000,
+            weeklyWindowMs: 10_080 * 60_000,
         });
     });
 
@@ -149,6 +153,8 @@ describe('Codex provider', () => {
             weeklyRemainingPct: 0,
             sessionResetsAtIso: '2026-02-08T00:00:00.000Z',
             weeklyResetsAtIso: null,
+            sessionWindowMs: null,
+            weeklyWindowMs: null,
         });
     });
 

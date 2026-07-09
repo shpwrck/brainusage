@@ -10,6 +10,11 @@ Rectangle {
     property var service: null
 
     function _dim(c) { return Qt.rgba(c.r, c.g, c.b, 0.7); }
+    function _paceColor(name) {
+        if (name === "green") return "#22c55e";
+        if (name === "yellow") return "#eab308";
+        return "#ef4444";
+    }
 
     Layout.fillWidth: true
     radius: 12
@@ -65,6 +70,13 @@ Rectangle {
                         font.pixelSize: 12
                         color: card._dim(Kirigami.Theme.textColor)
                     }
+                }
+
+                Text {
+                    text: modelData.paceText
+                    font.pixelSize: 12
+                    font.bold: true
+                    color: card._paceColor(modelData.paceColor)
                 }
             }
         }
