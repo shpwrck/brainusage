@@ -33,6 +33,15 @@
     font-weight: bold;
     color: #ffffff;
 }
+.usage-window-header {
+    spacing: 6px;
+}
+/* Projected end-of-window utilization ("On pace: NN%"); color is applied
+   separately via the usage-value-* classes (green = maximizing usage). */
+.usage-window-pace {
+    font-size: 12px;
+    font-weight: 700;
+}
 
 /* Progress Bar Track — dark-aware translucent */
 .usage-progress-track {

@@ -3,37 +3,58 @@ const VERSION = 'brainusage 1.0.1';
 export const PANEL_LABEL_MODES = ['min', 'claude-session', 'claude-weekly', 'codex-session', 'codex-weekly'];
 
 export const PANEL_ITEMS = [
-    {key: 'min', label: 'Overall minimum', shortLabel: 'Min', providerKey: null, providerName: null, windowLabel: 'Min'},
-    {key: 'claude-session', label: 'Claude session', shortLabel: 'C', providerKey: 'claude', providerName: 'Claude', windowLabel: 'Session'},
-    {key: 'claude-weekly', label: 'Claude weekly', shortLabel: 'Cw', providerKey: 'claude', providerName: 'Claude', windowLabel: 'Week'},
-    {key: 'codex-session', label: 'Codex session', shortLabel: 'X', providerKey: 'codex', providerName: 'Codex', windowLabel: 'Session'},
-    {key: 'codex-weekly', label: 'Codex weekly', shortLabel: 'Xw', providerKey: 'codex', providerName: 'Codex', windowLabel: 'Week'},
+    {key: 'min', label: 'Overall minimum', shortLabel: 'Min', providerKey: null, providerName: null, windowLabel: 'Min', window: null, metric: 'remaining'},
+    {key: 'claude-session', label: 'Claude session', shortLabel: 'C', providerKey: 'claude', providerName: 'Claude', windowLabel: 'Session', window: 'session', metric: 'remaining'},
+    {key: 'claude-weekly', label: 'Claude weekly', shortLabel: 'Cw', providerKey: 'claude', providerName: 'Claude', windowLabel: 'Week', window: 'weekly', metric: 'remaining'},
+    {key: 'codex-session', label: 'Codex session', shortLabel: 'X', providerKey: 'codex', providerName: 'Codex', windowLabel: 'Session', window: 'session', metric: 'remaining'},
+    {key: 'codex-weekly', label: 'Codex weekly', shortLabel: 'Xw', providerKey: 'codex', providerName: 'Codex', windowLabel: 'Week', window: 'weekly', metric: 'remaining'},
+    // Utilization (pace) items: projected end-of-window usage. The '↑' marks a
+    // pace metric versus the plain remaining-% items above.
+    {key: 'claude-session-pace', label: 'Claude session pace', shortLabel: 'C↑', providerKey: 'claude', providerName: 'Claude', windowLabel: 'Sess pace', window: 'session', metric: 'pace'},
+    {key: 'claude-weekly-pace', label: 'Claude weekly pace', shortLabel: 'Cw↑', providerKey: 'claude', providerName: 'Claude', windowLabel: 'Wk pace', window: 'weekly', metric: 'pace'},
+    {key: 'codex-session-pace', label: 'Codex session pace', shortLabel: 'X↑', providerKey: 'codex', providerName: 'Codex', windowLabel: 'Sess pace', window: 'session', metric: 'pace'},
+    {key: 'codex-weekly-pace', label: 'Codex weekly pace', shortLabel: 'Xw↑', providerKey: 'codex', providerName: 'Codex', windowLabel: 'Wk pace', window: 'weekly', metric: 'pace'},
 ];
 
 const PANEL_ITEM_SHORT_LABELS = {};
 for (const item of PANEL_ITEMS)
     PANEL_ITEM_SHORT_LABELS[item.key] = item.shortLabel;
 
-function getPanelLabelValue(summary, mode) {
+function getPanelItemValue(summary, item, now) {
+    if (!item || item.window === null)
+        return summary?.minRemainingPct;
+
+    const data = summary?.providers?.[item.providerKey]?.data;
+    if (!data)
+        return undefined;
+
+    const remainingPct = item.window === 'session'
+        ? data.sessionRemainingPct
+        : data.weeklyRemainingPct;
+
+    if (item.metric === 'remaining')
+        return remainingPct;
+
+    const resetsAtIso = item.window === 'session' ? data.sessionResetsAtIso : data.weeklyResetsAtIso;
+    const windowMs = item.window === 'session' ? data.sessionWindowMs : data.weeklyWindowMs;
+    const pace = computeUtilizationPct(remainingPct, resetsAtIso, windowMs, now);
+    return Number.isFinite(pace) ? pace : undefined;
+}
+
+function getPanelLabelValue(summary, mode, now) {
     if (mode === 'min' || !mode)
         return summary?.minRemainingPct;
 
-    const providers = summary?.providers;
-    if (!providers)
-        return undefined;
+    const item = PANEL_ITEMS.find((entry) => entry.key === mode);
+    if (!item)
+        return summary?.minRemainingPct;
 
-    switch (mode) {
-        case 'claude-session': return providers.claude?.data?.sessionRemainingPct;
-        case 'claude-weekly':  return providers.claude?.data?.weeklyRemainingPct;
-        case 'codex-session':  return providers.codex?.data?.sessionRemainingPct;
-        case 'codex-weekly':   return providers.codex?.data?.weeklyRemainingPct;
-        default: return summary?.minRemainingPct;
-    }
+    return getPanelItemValue(summary, item, now);
 }
 
-function buildPanelLabel(summary, deps) {
+function buildPanelLabel(summary, deps, now) {
     if (!Array.isArray(deps.panelItems))
-        return formatPercent(getPanelLabelValue(summary, deps.panelLabelMode ?? 'min'));
+        return formatPercent(getPanelLabelValue(summary, deps.panelLabelMode ?? 'min', now));
 
     const items = deps.panelItems.filter(key => key in PANEL_ITEM_SHORT_LABELS);
     if (items.length === 0)
@@ -43,7 +64,7 @@ function buildPanelLabel(summary, deps) {
 
     return items
         .map(key => {
-            const pct = formatPercent(getPanelLabelValue(summary, key));
+            const pct = formatPercent(getPanelLabelValue(summary, key, now));
             return showLabels ? `${PANEL_ITEM_SHORT_LABELS[key]} ${pct}` : pct;
         })
         .join(' · ');
@@ -52,7 +73,7 @@ function buildPanelLabel(summary, deps) {
 // Structured form of the panel label for widget-based renderers (GNOME):
 // items grouped per provider so each group can carry the provider logo, with
 // a health color per value. The joined-string panelLabel remains for KDE.
-function buildPanelGroups(summary, deps) {
+function buildPanelGroups(summary, deps, now) {
     if (!summary || !Array.isArray(deps.panelItems))
         return [];
 
@@ -73,12 +94,12 @@ function buildPanelGroups(summary, deps) {
             groups.push(group);
         }
 
-        const pct = getPanelLabelValue(summary, key);
+        const pct = getPanelItemValue(summary, item, now);
         group.items.push({
             key,
             label: showLabels ? item.windowLabel : '',
             percentText: formatPercent(pct),
-            dotColor: getDotColor(pct),
+            dotColor: item.metric === 'pace' ? getPaceColor(pct) : getDotColor(pct),
         });
     }
 
@@ -103,6 +124,59 @@ export function getDotColor(pct) {
         return 'yellow';
 
     return 'red';
+}
+
+// A pace projection needs enough of the window to have elapsed to be meaningful;
+// in the first sliver of a window a tiny sample extrapolates to wild numbers.
+const MIN_ELAPSED_FRACTION = 0.05;
+
+// Projected end-of-window utilization: extrapolate the usage consumed so far
+// across the full window. 100 means on pace to use the entire window by the time
+// it resets; below 100 means quota will be left unused; above 100 means usage is
+// on pace to be exhausted before the reset. Returns null when it cannot be
+// projected (missing window duration/reset, or too early in the window).
+export function computeUtilizationPct(remainingPct, resetsAtIso, windowMs, now) {
+    if (!Number.isFinite(remainingPct) || !Number.isFinite(windowMs) || windowMs <= 0)
+        return null;
+
+    if (!resetsAtIso)
+        return null;
+
+    const resetsAt = new Date(resetsAtIso).getTime();
+    // A reset time at or before now means the stored window has already expired
+    // (stale data between polls); its pace is no longer current, so report it as
+    // unknown rather than projecting the old window's usage.
+    if (Number.isNaN(resetsAt) || resetsAt <= now)
+        return null;
+
+    const elapsedFraction = Math.min(1, (windowMs - (resetsAt - now)) / windowMs);
+    if (!Number.isFinite(elapsedFraction) || elapsedFraction < MIN_ELAPSED_FRACTION)
+        return null;
+
+    const usedPct = Math.max(0, 100 - remainingPct);
+    return usedPct / elapsedFraction;
+}
+
+// Pace color is inverted from remaining%: the goal is to fully use each window,
+// so a high projected utilization is healthy and a low one means wasted quota.
+export function getPaceColor(pacePct) {
+    if (!Number.isFinite(pacePct))
+        return 'red';
+
+    if (pacePct >= 85)
+        return 'green';
+
+    if (pacePct >= 55)
+        return 'yellow';
+
+    return 'red';
+}
+
+function formatPaceText(pacePct) {
+    if (!Number.isFinite(pacePct))
+        return 'On pace: --';
+
+    return `On pace: ${Math.round(pacePct)}%`;
 }
 
 export function formatRelativeTime(iso, now) {
@@ -166,13 +240,18 @@ function toWarningText(providerLabel, code) {
     return '';
 }
 
-function buildWindowViewModel(label, remainingPct, resetsAtIso, now) {
+function buildWindowViewModel(label, remainingPct, resetsAtIso, windowMs, now) {
+    const pacePct = computeUtilizationPct(remainingPct, resetsAtIso, windowMs, now);
+
     return {
         label,
         remainingPct: Number.isFinite(remainingPct) ? Math.round(remainingPct) : 0,
         remainingText: formatRemainingText(remainingPct),
         resetsInText: formatResetsIn(resetsAtIso, now),
         dotColor: getDotColor(remainingPct),
+        pacePct: Number.isFinite(pacePct) ? Math.round(pacePct) : null,
+        paceText: formatPaceText(pacePct),
+        paceColor: getPaceColor(pacePct),
     };
 }
 
@@ -186,12 +265,14 @@ function buildServiceViewModel(name, providerData, providerCode, now) {
                 'Session',
                 data?.sessionRemainingPct,
                 data?.sessionResetsAtIso,
+                data?.sessionWindowMs,
                 now,
             ),
             buildWindowViewModel(
                 'Weekly',
                 data?.weeklyRemainingPct,
                 data?.weeklyResetsAtIso,
+                data?.weeklyWindowMs,
                 now,
             ),
         ],
@@ -226,8 +307,8 @@ export function buildUsageViewModel(summary, deps = {}) {
     const codex = summary?.providers?.codex ?? null;
 
     return {
-        panelLabel: buildPanelLabel(summary, deps),
-        panelGroups: buildPanelGroups(summary, deps),
+        panelLabel: buildPanelLabel(summary, deps, now),
+        panelGroups: buildPanelGroups(summary, deps, now),
         services: [
             buildServiceViewModel('Codex', codex?.data, codex?.code, now),
             buildServiceViewModel('Claude', claude?.data, claude?.code, now),

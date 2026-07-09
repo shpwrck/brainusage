@@ -1,16 +1,27 @@
 import {describe, expect, test} from 'bun:test';
 
-import {buildUsageViewModel, formatRelativeTime, getDotColor, PANEL_ITEMS, PANEL_LABEL_MODES} from '../../shared/ui/render.js';
+import {
+    buildUsageViewModel,
+    computeUtilizationPct,
+    formatRelativeTime,
+    getDotColor,
+    getPaceColor,
+    PANEL_ITEMS,
+    PANEL_LABEL_MODES,
+} from '../../shared/ui/render.js';
 
 const NOW = new Date('2026-02-09T10:00:00Z').getTime();
 
-function makeWindow(label, pct, resetsInText, dotColor) {
+function makeWindow(label, pct, resetsInText, dotColor, pace = null) {
     return {
         label,
         remainingPct: pct,
         remainingText: `${pct}% left`,
         resetsInText,
         dotColor,
+        pacePct: pace?.pacePct ?? null,
+        paceText: pace?.paceText ?? 'On pace: --',
+        paceColor: pace?.paceColor ?? 'red',
     };
 }
 
@@ -212,8 +223,10 @@ describe('panelItems', () => {
         },
     };
 
-    test('PANEL_ITEMS covers every panel label mode', () => {
-        expect(PANEL_ITEMS.map(item => item.key)).toEqual(PANEL_LABEL_MODES);
+    test('PANEL_ITEMS includes every legacy panel label mode', () => {
+        const keys = new Set(PANEL_ITEMS.map(item => item.key));
+        for (const mode of PANEL_LABEL_MODES)
+            expect(keys.has(mode)).toBe(true);
     });
 
     test('multiple items are labeled and joined', () => {
@@ -415,5 +428,98 @@ describe('getDotColor', () => {
     test('red for non-finite', () => {
         expect(getDotColor(undefined)).toBe('red');
         expect(getDotColor(NaN)).toBe('red');
+    });
+});
+
+describe('computeUtilizationPct', () => {
+    const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
+    // Half the 5h window elapsed (resets 2h30m from NOW).
+    const HALFWAY_RESET = '2026-02-09T12:30:00.000Z';
+
+    test('projects end-of-window usage from the elapsed fraction', () => {
+        // 60% used in the first half of the window projects to 120%.
+        expect(computeUtilizationPct(40, HALFWAY_RESET, FIVE_HOURS_MS, NOW)).toBe(120);
+        // Exactly on pace to fill the window.
+        expect(computeUtilizationPct(50, HALFWAY_RESET, FIVE_HOURS_MS, NOW)).toBe(100);
+        // Under pace: quota will be left unused.
+        expect(computeUtilizationPct(80, HALFWAY_RESET, FIVE_HOURS_MS, NOW)).toBe(40);
+    });
+
+    test('returns null too early in the window', () => {
+        // Resets 4h58m from NOW => only 2m of a 5h window elapsed.
+        const almostFull = '2026-02-09T14:58:00.000Z';
+        expect(computeUtilizationPct(90, almostFull, FIVE_HOURS_MS, NOW)).toBeNull();
+    });
+
+    test('returns null once the window has already reset', () => {
+        // Stale data whose reset time is in the past must not project pace.
+        const past = '2026-02-09T09:00:00.000Z';
+        expect(computeUtilizationPct(40, past, FIVE_HOURS_MS, NOW)).toBeNull();
+        expect(computeUtilizationPct(40, new Date(NOW).toISOString(), FIVE_HOURS_MS, NOW)).toBeNull();
+    });
+
+    test('returns null without a window duration or reset time', () => {
+        expect(computeUtilizationPct(40, HALFWAY_RESET, null, NOW)).toBeNull();
+        expect(computeUtilizationPct(40, null, FIVE_HOURS_MS, NOW)).toBeNull();
+        expect(computeUtilizationPct(undefined, HALFWAY_RESET, FIVE_HOURS_MS, NOW)).toBeNull();
+    });
+});
+
+describe('getPaceColor', () => {
+    test('green when on pace to fill (>= 85)', () => {
+        expect(getPaceColor(85)).toBe('green');
+        expect(getPaceColor(140)).toBe('green');
+    });
+
+    test('yellow when moderately under pace (55-84)', () => {
+        expect(getPaceColor(55)).toBe('yellow');
+        expect(getPaceColor(84)).toBe('yellow');
+    });
+
+    test('red when far under pace or unknown', () => {
+        expect(getPaceColor(54)).toBe('red');
+        expect(getPaceColor(null)).toBe('red');
+    });
+});
+
+describe('utilization surfaces in windows and panel items', () => {
+    const SUMMARY = {
+        minRemainingPct: 40,
+        providers: {
+            claude: {
+                code: 'OK',
+                data: {
+                    sessionRemainingPct: 40,
+                    weeklyRemainingPct: 40,
+                    sessionResetsAtIso: '2026-02-09T12:30:00.000Z',
+                    weeklyResetsAtIso: null,
+                    sessionWindowMs: 5 * 60 * 60 * 1000,
+                    weeklyWindowMs: 7 * 24 * 60 * 60 * 1000,
+                },
+            },
+        },
+    };
+
+    test('window view model carries projected utilization', () => {
+        const claude = buildUsageViewModel(SUMMARY, {now: NOW}).services[1];
+        expect(claude.windows[0].pacePct).toBe(120);
+        expect(claude.windows[0].paceText).toBe('On pace: 120%');
+        expect(claude.windows[0].paceColor).toBe('green');
+        // Weekly has no reset time here, so pace is unknown.
+        expect(claude.windows[1].pacePct).toBeNull();
+        expect(claude.windows[1].paceText).toBe('On pace: --');
+    });
+
+    test('pace panel items render the projected value with pace colors', () => {
+        const view = buildUsageViewModel(SUMMARY, {
+            now: NOW,
+            panelItems: ['claude-session-pace'],
+        });
+        expect(view.panelLabel).toBe('120%');
+        expect(view.panelGroups).toEqual([
+            {providerKey: 'claude', items: [
+                {key: 'claude-session-pace', label: 'Sess pace', percentText: '120%', dotColor: 'green'},
+            ]},
+        ]);
     });
 });

@@ -29,6 +29,12 @@ const PANEL_VALUE_CLASSES = {
     red: 'usage-panel-value usage-value-red',
 };
 
+const PACE_VALUE_CLASSES = {
+    green: 'usage-window-pace usage-value-green',
+    yellow: 'usage-window-pace usage-value-yellow',
+    red: 'usage-window-pace usage-value-red',
+};
+
 const StayOpenSwitchMenuItem = GObject.registerClass(
 class StayOpenSwitchMenuItem extends PopupMenu.PopupSwitchMenuItem {
     activate(_event) {
@@ -100,7 +106,19 @@ function createWindowWidgets() {
         style_class: 'usage-window-row',
     });
 
+    const headerRow = new St.BoxLayout({style_class: 'usage-window-header'});
+    headerRow.set_x_expand(true);
     const label = new St.Label({style_class: 'usage-window-label'});
+    const headerSpacer = new St.Widget();
+    headerSpacer.set_x_expand(true);
+    const paceLabel = new St.Label({
+        text: 'On pace: --',
+        style_class: 'usage-window-pace',
+        y_align: Clutter.ActorAlign.CENTER,
+    });
+    headerRow.add_child(label);
+    headerRow.add_child(headerSpacer);
+    headerRow.add_child(paceLabel);
 
     const track = new St.BoxLayout({style_class: 'usage-progress-track'});
     track.set_x_expand(true);
@@ -127,11 +145,11 @@ function createWindowWidgets() {
     infoRow.add_child(spacer);
     infoRow.add_child(resetsLabel);
 
-    box.add_child(label);
+    box.add_child(headerRow);
     box.add_child(track);
     box.add_child(infoRow);
 
-    return {box, label, track, fill, remainingLabel, resetsLabel};
+    return {box, label, paceLabel, track, fill, remainingLabel, resetsLabel};
 }
 
 function createServiceSection() {
@@ -391,6 +409,8 @@ class UsageIndicator extends PanelMenu.Button {
                 const widgets = section.windows[j];
 
                 widgets.label.text = w.label;
+                widgets.paceLabel.text = w.paceText;
+                widgets.paceLabel.style_class = PACE_VALUE_CLASSES[w.paceColor] ?? PACE_VALUE_CLASSES.red;
                 widgets.fill.style_class = FILL_CLASSES[w.dotColor] ?? 'usage-fill-red';
                 widgets.fill._remainingPct = w.remainingPct;
                 widgets.remainingLabel.text = w.remainingText;

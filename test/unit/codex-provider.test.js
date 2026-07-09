@@ -59,10 +59,12 @@ describe('Codex provider', () => {
                         primary_window: {
                             used_percent: 42,
                             reset_at: 1_770_508_800,
+                            window_minutes: 300,
                         },
                         secondary_window: {
                             used_percent: 64,
                             reset_at: 1_770_768_000,
+                            window_minutes: 10_080,
                         },
                     },
                 });
@@ -77,7 +79,29 @@ describe('Codex provider', () => {
             weeklyRemainingPct: 36,
             sessionResetsAtIso: '2026-02-08T00:00:00.000Z',
             weeklyResetsAtIso: '2026-02-11T00:00:00.000Z',
+            sessionWindowMs: 300 * 60_000,
+            weeklyWindowMs: 10_080 * 60_000,
         });
+    });
+
+    test('reads window duration from the raw limit_window_seconds field', async () => {
+        const provider = createCodexProvider({
+            readTextFile: async () => JSON.stringify({
+                tokens: {access_token: 'access-token', refresh_token: 'refresh-token'},
+            }),
+            fetch: async () => createJsonResponse(200, {
+                rate_limit: {
+                    primary_window: {used_percent: 42, reset_at: 1_770_508_800, limit_window_seconds: 18_000},
+                    secondary_window: {used_percent: 64, reset_at: 1_770_768_000, limit_window_seconds: 604_800},
+                },
+            }),
+        });
+
+        const result = await provider.getUsage();
+
+        expect(result.ok).toBe(true);
+        expect(result.data.sessionWindowMs).toBe(18_000 * 1000);
+        expect(result.data.weeklyWindowMs).toBe(604_800 * 1000);
     });
 
     test('refreshes on usage 401 and retries once', async () => {
@@ -149,6 +173,8 @@ describe('Codex provider', () => {
             weeklyRemainingPct: 0,
             sessionResetsAtIso: '2026-02-08T00:00:00.000Z',
             weeklyResetsAtIso: null,
+            sessionWindowMs: 5 * 60 * 60 * 1000,
+            weeklyWindowMs: null,
         });
     });
 
