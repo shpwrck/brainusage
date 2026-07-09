@@ -1,6 +1,14 @@
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup?version=3.0';
 
+// A stalled connection (VPN, WiFi roaming, suspend/resume) would otherwise
+// leave send_and_read_async hanging without ever invoking its callback. Since
+// the scheduler serializes each provider's polls on a single Promise chain, one
+// never-settling request blocks that provider forever. Bounding I/O guarantees
+// hung requests reject, so the request surfaces as a network error and backoff
+// can retry it.
+const REQUEST_TIMEOUT_SECONDS = 30;
+
 function normalizeHeaders(headers) {
     if (!headers || typeof headers !== 'object')
         return [];
@@ -60,15 +68,19 @@ function createResponse(status, bytes) {
 }
 
 export function createFetch() {
-    const session = new Soup.Session();
+    const session = new Soup.Session({
+        timeout: REQUEST_TIMEOUT_SECONDS,
+        idle_timeout: REQUEST_TIMEOUT_SECONDS,
+    });
 
-    function sendMessage(message) {
+    function sendMessage(message, url) {
         return new Promise((resolve, reject) => {
             session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null, (source, result) => {
                 try {
                     const bytes = source.send_and_read_finish(result);
                     resolve(bytes);
                 } catch (error) {
+                    console.warn(`[brainusage] request to ${url} failed: ${error?.message ?? error}`);
                     reject(error);
                 }
             });
@@ -94,8 +106,12 @@ export function createFetch() {
             message.set_request_body_from_bytes(getContentType(options.headers), bytes);
         }
 
-        const bytes = await sendMessage(message);
-        return createResponse(message.get_status(), bytes);
+        const bytes = await sendMessage(message, url);
+        const status = message.get_status();
+        if (status >= 500)
+            console.warn(`[brainusage] request to ${url} returned status ${status}`);
+
+        return createResponse(status, bytes);
     }
 
     function dispose() {
