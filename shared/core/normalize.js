@@ -19,9 +19,12 @@ function unixSecondsToIso(value) {
     return new Date(seconds * 1000).toISOString();
 }
 
-// Claude's OAuth usage windows are fixed durations named by the payload keys.
-const CLAUDE_SESSION_WINDOW_MS = 5 * 60 * 60 * 1000;
-const CLAUDE_WEEKLY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+// Usage windows are fixed durations: a rolling 5-hour session window and a
+// 7-day weekly window. Both Claude and Codex share this cadence. Codex's
+// wham/usage payload doesn't carry a window duration, so these are the
+// fallback when it isn't provided explicitly.
+const SESSION_WINDOW_MS = 5 * 60 * 60 * 1000;
+const WEEKLY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 function minutesToMs(value) {
     const minutes = Number(value);
@@ -29,6 +32,15 @@ function minutesToMs(value) {
         return null;
 
     return minutes * 60_000;
+}
+
+// Prefer an explicit window duration from the payload; fall back to the known
+// fixed duration when the window exists but doesn't report one.
+function windowMsFor(window, fallbackMs) {
+    if (!window)
+        return null;
+
+    return minutesToMs(window.window_minutes) ?? fallbackMs;
 }
 
 export function normalizeClaudeUsage(payload) {
@@ -41,8 +53,8 @@ export function normalizeClaudeUsage(payload) {
             weeklyRemainingPct: clampPercent(100 - sevenDayUtilization),
             sessionResetsAtIso: payload?.five_hour?.resets_at ?? null,
             weeklyResetsAtIso: payload?.seven_day?.resets_at ?? null,
-            sessionWindowMs: CLAUDE_SESSION_WINDOW_MS,
-            weeklyWindowMs: CLAUDE_WEEKLY_WINDOW_MS,
+            sessionWindowMs: SESSION_WINDOW_MS,
+            weeklyWindowMs: WEEKLY_WINDOW_MS,
         },
         hasSessionUsage: Number.isFinite(fiveHourUtilization),
         hasWeeklyUsage: Number.isFinite(sevenDayUtilization),
@@ -59,8 +71,8 @@ export function normalizeCodexUsage(payload) {
             weeklyRemainingPct: clampPercent(100 - Number(secondaryWindow?.used_percent)),
             sessionResetsAtIso: unixSecondsToIso(primaryWindow?.reset_at),
             weeklyResetsAtIso: unixSecondsToIso(secondaryWindow?.reset_at),
-            sessionWindowMs: minutesToMs(primaryWindow?.window_minutes),
-            weeklyWindowMs: minutesToMs(secondaryWindow?.window_minutes),
+            sessionWindowMs: windowMsFor(primaryWindow, SESSION_WINDOW_MS),
+            weeklyWindowMs: windowMsFor(secondaryWindow, WEEKLY_WINDOW_MS),
         },
         hasPrimaryWindow: Boolean(primaryWindow),
         hasSecondaryWindow: Boolean(secondaryWindow),

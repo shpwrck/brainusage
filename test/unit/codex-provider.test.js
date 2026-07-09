@@ -153,7 +153,7 @@ describe('Codex provider', () => {
             weeklyRemainingPct: 0,
             sessionResetsAtIso: '2026-02-08T00:00:00.000Z',
             weeklyResetsAtIso: null,
-            sessionWindowMs: null,
+            sessionWindowMs: 5 * 60 * 60 * 1000,
             weeklyWindowMs: null,
         });
     });
