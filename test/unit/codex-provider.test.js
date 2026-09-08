@@ -75,6 +75,8 @@ describe('Codex provider', () => {
 
         expect(result.ok).toBe(true);
         expect(result.data).toEqual({
+            planType: null,
+            availableWindows: ['session', 'weekly'],
             sessionRemainingPct: 58,
             weeklyRemainingPct: 36,
             sessionResetsAtIso: '2026-02-08T00:00:00.000Z',
@@ -146,7 +148,7 @@ describe('Codex provider', () => {
         expect(result.data.sessionRemainingPct).toBe(90);
     });
 
-    test('returns partial_data when secondary_window is missing', async () => {
+    test('accepts a single window when secondary_window is missing', async () => {
         const provider = createCodexProvider({
             readTextFile: async () => JSON.stringify({
                 tokens: {
@@ -166,11 +168,12 @@ describe('Codex provider', () => {
 
         const result = await provider.getUsage();
 
-        expect(result.ok).toBe(false);
-        expect(result.error.code).toBe('partial_data');
+        expect(result.ok).toBe(true);
         expect(result.data).toEqual({
+            planType: null,
+            availableWindows: ['session'],
             sessionRemainingPct: 65,
-            weeklyRemainingPct: 0,
+            weeklyRemainingPct: null,
             sessionResetsAtIso: '2026-02-08T00:00:00.000Z',
             weeklyResetsAtIso: null,
             sessionWindowMs: 5 * 60 * 60 * 1000,

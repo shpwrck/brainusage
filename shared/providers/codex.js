@@ -186,7 +186,7 @@ export function createCodexProvider(options = {}) {
                     return fail('schema_changed', 'Usage payload is missing expected rate_limit windows');
 
                 if (normalized.hasPartialData)
-                    return fail('partial_data', 'Usage payload is missing primary_window or secondary_window', normalized.data);
+                    return fail('partial_data', 'Usage payload contains an invalid utilization field', normalized.data);
 
                 return ok(normalized.data);
             } catch {

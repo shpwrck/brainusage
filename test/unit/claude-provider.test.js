@@ -45,6 +45,8 @@ describe('Claude provider', () => {
             calls.push({url, options});
 
             if (url === claudeProviderConfig.REFRESH_ENDPOINT) {
+                expect(options.headers['content-type']).toBe('application/json');
+                expect(JSON.parse(options.body).grant_type).toBe('refresh_token');
                 return createJsonResponse(200, {
                     access_token: 'fresh-token',
                     expires_at: new Date(Date.now() + 60_000).toISOString(),
@@ -180,4 +182,91 @@ describe('Claude provider', () => {
         expect(result.ok).toBe(false);
         expect(result.error.code).toBe('network_error');
     });
+});
+
+function rotatingProvider(options = {}) {
+    let raw = JSON.stringify({extra: 'preserved', claudeAiOauth: {
+        accessToken: 'old', refreshToken: 'refresh-old', expiresAt: 1, subscriptionType: 'max',
+    }});
+    let refreshes = 0;
+    const provider = createClaudeProvider({
+        readTextFile: async () => raw,
+        replaceTextFile: async (_path, expected, updated) => {
+            expect(raw).toBe(expected);
+            if (options.saveFailure?.()) throw new Error('write failed');
+            raw = updated;
+        },
+        fetch: async (url, init) => {
+            if (url === claudeProviderConfig.REFRESH_ENDPOINT) {
+                refreshes++;
+                return createJsonResponse(200, {access_token: 'new', refresh_token: 'refresh-new', expires_in: 3600});
+            }
+            expect(init.headers.authorization).toBe('Bearer new');
+            return createJsonResponse(200, {five_hour: {utilization: 10}, seven_day: {utilization: 20}});
+        },
+    });
+    return {provider, raw: () => JSON.parse(raw), refreshes: () => refreshes};
+}
+
+test('persists rotated Claude credentials, expiry and unrelated metadata across polls', async () => {
+    const fixture = rotatingProvider();
+    expect((await fixture.provider.getUsage()).ok).toBe(true);
+    expect((await fixture.provider.getUsage()).ok).toBe(true);
+    expect(fixture.refreshes()).toBe(1);
+    expect(fixture.raw().extra).toBe('preserved');
+    expect(fixture.raw().claudeAiOauth.subscriptionType).toBe('max');
+    expect(fixture.raw().claudeAiOauth.refreshToken).toBe('refresh-new');
+    expect(fixture.raw().claudeAiOauth.expiresAt).toBeGreaterThan(Date.now());
+});
+
+test('retries saving without spending the old refresh token again', async () => {
+    let fail = true;
+    const fixture = rotatingProvider({saveFailure: () => fail});
+    expect((await fixture.provider.getUsage()).ok).toBe(false);
+    fail = false;
+    expect((await fixture.provider.getUsage()).ok).toBe(true);
+    expect(fixture.refreshes()).toBe(1);
+    expect(fixture.raw().claudeAiOauth.refreshToken).toBe('refresh-new');
+});
+
+test('re-reads credentials after another client logs in', async () => {
+    let token = 'one';
+    const provider = createClaudeProvider({
+        readTextFile: async () => JSON.stringify({claudeAiOauth: {accessToken: token}}),
+        fetch: async (_url, init) => {
+            expect(init.headers.authorization).toBe(`Bearer ${token}`);
+            return createJsonResponse(200, {five_hour: {utilization: 10}, seven_day: {utilization: 20}});
+        },
+    });
+    expect((await provider.getUsage()).ok).toBe(true);
+    token = 'two';
+    expect((await provider.getUsage()).ok).toBe(true);
+});
+
+
+test('keeps refreshed credentials in memory on a read-only runtime', async () => {
+    let refreshes = 0;
+    const provider = createClaudeProvider({
+        readTextFile: async () => JSON.stringify({claudeAiOauth: {accessToken: 'old', refreshToken: 'old-refresh', expiresAt: 1}}),
+        fetch: async (url, init) => {
+            if (url === claudeProviderConfig.REFRESH_ENDPOINT) {
+                refreshes++;
+                return createJsonResponse(200, {access_token: 'new', refresh_token: 'new-refresh', expires_in: 3600});
+            }
+            expect(init.headers.authorization).toBe('Bearer new');
+            return createJsonResponse(200, {five_hour: {utilization: 10}, seven_day: {utilization: 20}});
+        },
+    });
+    expect((await provider.getUsage()).ok).toBe(true);
+    expect((await provider.getUsage()).ok).toBe(true);
+    expect(refreshes).toBe(1);
+});
+
+test('a rejected refresh is an auth error and does not overwrite credentials', async () => {
+    const provider = createClaudeProvider({
+        readTextFile: async () => JSON.stringify({claudeAiOauth: {refreshToken: 'rejected'}}),
+        replaceTextFile: async () => { throw new Error('must not write'); },
+        fetch: async () => createJsonResponse(400, {error: 'invalid_grant'}),
+    });
+    expect((await provider.getUsage()).error.code).toBe('auth_expired');
 });

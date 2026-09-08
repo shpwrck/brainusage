@@ -1,5 +1,4 @@
 import {normalizeClaudeUsage} from '../core/normalize.js';
-import {encodeForm} from '../core/http.js';
 
 const CREDENTIALS_PATH = '~/.claude/.credentials.json';
 const REFRESH_ENDPOINT = 'https://platform.claude.com/v1/oauth/token';
@@ -118,26 +117,27 @@ async function fetchUsage(fetchImpl, accessToken) {
     return ok(json);
 }
 
-async function refreshAccessToken(fetchImpl, refreshToken) {
+async function refreshAccessToken(fetchImpl, refreshToken, scopes) {
     if (!refreshToken)
         return fail('auth_expired', 'OAuth refresh token is missing');
 
-    const body = encodeForm({
+    const body = JSON.stringify({
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
         client_id: CLAUDE_CLIENT_ID,
+        ...(Array.isArray(scopes) && scopes.length ? {scope: scopes.join(' ')} : {}),
     });
 
     const response = await fetchImpl(REFRESH_ENDPOINT, {
         method: 'POST',
         headers: {
-            'content-type': 'application/x-www-form-urlencoded',
+            'content-type': 'application/json',
         },
         body,
     });
 
     if (!response.ok)
-        return fail(mapHttpStatusToErrorCode(response.status), `Refresh request failed with status ${response.status}`);
+        return fail(response.status === 400 ? 'auth_expired' : mapHttpStatusToErrorCode(response.status), `Refresh request failed with status ${response.status}`);
 
     let payload;
     try {
@@ -152,7 +152,11 @@ async function refreshAccessToken(fetchImpl, refreshToken) {
 
     return ok({
         accessToken,
-        expiresAt: resolveExpiry(payload),
+        refreshToken: resolveRefreshToken(payload) ?? refreshToken,
+        ...(Number.isFinite(payload.refresh_token_expires_in)
+            ? {refreshTokenExpiresAt: Date.now() + payload.refresh_token_expires_in * 1000} : {}),
+        expiresAt: resolveExpiry(payload) ?? (Number.isFinite(payload.expires_in)
+            ? Date.now() + payload.expires_in * 1000 : null),
     });
 }
 
@@ -161,6 +165,18 @@ export function createClaudeProvider(options = {}) {
     const readTextFile = options.readTextFile ?? defaultReadTextFile;
     const homeDir = options.homeDir ?? globalThis.process?.env?.HOME ?? null;
     const credentialsPath = resolveCredentialsPath(homeDir);
+
+    // Keep rotated credentials between polls, including on read-only runtimes.
+    // A changed file always wins, so a CLI login/account switch is respected.
+    let cached = null;
+
+    async function saveCached() {
+        if (!cached?.pending || typeof options.replaceTextFile !== 'function')
+            return;
+        await options.replaceTextFile(credentialsPath, cached.source, cached.updated);
+        cached.source = cached.updated;
+        cached.pending = false;
+    }
 
     return {
         async getUsage() {
@@ -184,16 +200,49 @@ export function createClaudeProvider(options = {}) {
                 return fail('parse_error', 'Unable to parse Claude credentials JSON');
             }
 
-            const oauthCredentials = parsedCredentials?.claudeAiOauth;
+            if (cached && cached.source !== rawCredentials)
+                cached = null;
+            const oauthCredentials = cached?.oauth ?? parsedCredentials?.claudeAiOauth;
             if (!oauthCredentials)
                 return fail('missing_creds', 'Missing claudeAiOauth in credentials JSON');
 
             let accessToken = resolveAccessToken(oauthCredentials);
-            const refreshToken = resolveRefreshToken(oauthCredentials);
+            let refreshToken = resolveRefreshToken(oauthCredentials);
+            let didRefresh = false;
+            const refresh = async () => {
+                const refreshed = await refreshAccessToken(fetchImpl, refreshToken, oauthCredentials.scopes);
+                if (!refreshed.ok)
+                    return refreshed;
+                didRefresh = true;
+                accessToken = refreshed.data.accessToken;
+                refreshToken = refreshed.data.refreshToken;
+                const oauth = {...oauthCredentials, ...refreshed.data};
+                // Keep aliases consistent for clients using snake_case credentials.
+                if ('access_token' in oauth) oauth.access_token = accessToken;
+                if ('refresh_token' in oauth) oauth.refresh_token = refreshToken;
+                if ('expires_at' in oauth) oauth.expires_at = oauth.expiresAt;
+                if ('expiry' in oauth) oauth.expiry = oauth.expiresAt;
+                if ('token' in oauth) oauth.token = accessToken;
+                cached = {
+                    source: rawCredentials,
+                    oauth,
+                    updated: JSON.stringify({...parsedCredentials, claudeAiOauth: oauth}),
+                    pending: true,
+                };
+                await saveCached();
+                return refreshed;
+            };
 
             try {
+                await saveCached();
+                // A pending save can have changed the on-disk snapshot before
+                // another refresh (for example, a subsequent usage 401).
+                if (cached && !cached.pending) {
+                    rawCredentials = cached.source;
+                    parsedCredentials = JSON.parse(rawCredentials);
+                }
                 if (!accessToken || isTokenExpired(oauthCredentials)) {
-                    const refreshed = await refreshAccessToken(fetchImpl, refreshToken);
+                    const refreshed = await refresh();
                     if (!refreshed.ok)
                         return refreshed;
 
@@ -201,8 +250,8 @@ export function createClaudeProvider(options = {}) {
                 }
 
                 let usageResponse = await fetchUsage(fetchImpl, accessToken);
-                if (!usageResponse.ok && usageResponse.error.code === 'auth_expired') {
-                    const refreshed = await refreshAccessToken(fetchImpl, refreshToken);
+                if (!didRefresh && !usageResponse.ok && usageResponse.error.code === 'auth_expired') {
+                    const refreshed = await refresh();
                     if (!refreshed.ok)
                         return refreshed;
 

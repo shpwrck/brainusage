@@ -13,9 +13,9 @@ import {createScheduler} from './lib/core/scheduler.js';
 import {createThresholdNotifier} from './lib/core/notifications.js';
 import {createClaudeProvider} from './lib/providers/claude.js';
 import {createCodexProvider} from './lib/providers/codex.js';
-import {readTextFile} from './lib/runtime/fs.js';
+import {readTextFile, replaceTextFile} from './lib/runtime/fs.js';
 import {createFetch} from './lib/runtime/fetch.js';
-import {buildUsageViewModel, PANEL_ITEMS, PANEL_LABEL_MODES} from './lib/ui/render.js';
+import {buildUsageViewModel, isItemAvailable, PANEL_ITEMS, PANEL_LABEL_MODES} from './lib/ui/render.js';
 
 const FILL_CLASSES = {
     green: 'usage-fill-green',
@@ -395,6 +395,10 @@ class UsageIndicator extends PanelMenu.Button {
 
     _applyViewModel(vm) {
         this._applyPanelGroups(vm);
+        for (const switchItem of this._itemSwitches) {
+            const item = PANEL_ITEMS.find(entry => entry.key === switchItem._itemKey);
+            switchItem.visible = isItemAvailable(this._lastSummary, item);
+        }
 
         const sections = [this._codexSection, this._claudeSection];
 
@@ -404,7 +408,10 @@ class UsageIndicator extends PanelMenu.Button {
 
             section.nameLabel.text = svc.name;
 
-            for (let j = 0; j < svc.windows.length; j++) {
+            for (let j = 0; j < section.windows.length; j++) {
+                section.windows[j].box.visible = j < svc.windows.length;
+                if (j >= svc.windows.length)
+                    continue;
                 const w = svc.windows[j];
                 const widgets = section.windows[j];
 
@@ -473,6 +480,7 @@ export default class UsageLimitsExtension extends Extension {
         const fileReader = readTextFile;
 
         const claude = createClaudeProvider({
+            replaceTextFile,
             fetch: fetchImpl,
             readTextFile: fileReader,
         });

@@ -20,6 +20,11 @@ const PANEL_ITEM_SHORT_LABELS = {};
 for (const item of PANEL_ITEMS)
     PANEL_ITEM_SHORT_LABELS[item.key] = item.shortLabel;
 
+export function isItemAvailable(summary, item) {
+    const windows = summary?.providers?.[item?.providerKey]?.data?.availableWindows;
+    return !item?.window || !Array.isArray(windows) || windows.includes(item.window);
+}
+
 function getPanelItemValue(summary, item, now) {
     if (!item || item.window === null)
         return summary?.minRemainingPct;
@@ -56,7 +61,8 @@ function buildPanelLabel(summary, deps, now) {
     if (!Array.isArray(deps.panelItems))
         return formatPercent(getPanelLabelValue(summary, deps.panelLabelMode ?? 'min', now));
 
-    const items = deps.panelItems.filter(key => key in PANEL_ITEM_SHORT_LABELS);
+    const items = deps.panelItems.filter(key => key in PANEL_ITEM_SHORT_LABELS &&
+        isItemAvailable(summary, PANEL_ITEMS.find(item => item.key === key)));
     if (items.length === 0)
         return '--';
 
@@ -83,7 +89,7 @@ function buildPanelGroups(summary, deps, now) {
 
     for (const key of deps.panelItems) {
         const item = PANEL_ITEMS.find((entry) => entry.key === key);
-        if (!item)
+        if (!item || !isItemAvailable(summary, item))
             continue;
 
         const groupKey = item.providerKey ?? item.key;
@@ -226,7 +232,7 @@ function formatResetsIn(iso, now) {
 
 function toWarningText(providerLabel, code) {
     if (code === 'AUTH_EXPIRED')
-        return `${providerLabel}: authentication expired`;
+        return `${providerLabel}: authentication expired${providerLabel === 'Claude' ? ' — run claude auth login' : ''}`;
 
     if (code === 'PARTIAL_DATA')
         return `${providerLabel}: partial usage data`;
@@ -259,7 +265,7 @@ function buildServiceViewModel(name, providerData, providerCode, now) {
     const data = providerData ?? null;
 
     return {
-        name,
+        name: data?.planType ? `${name} (${data.planType.charAt(0).toUpperCase()}${data.planType.slice(1)})` : name,
         windows: [
             buildWindowViewModel(
                 'Session',
@@ -275,7 +281,8 @@ function buildServiceViewModel(name, providerData, providerCode, now) {
                 data?.weeklyWindowMs,
                 now,
             ),
-        ],
+        ].filter((window, index) => !Array.isArray(data?.availableWindows) ||
+            data.availableWindows.includes(index === 0 ? 'session' : 'weekly')),
         warning: toWarningText(name, providerCode),
     };
 }
