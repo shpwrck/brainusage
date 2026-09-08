@@ -75,18 +75,31 @@ export function normalizeClaudeUsage(payload) {
 export function normalizeCodexUsage(payload) {
     const primaryWindow = payload?.rate_limit?.primary_window;
     const secondaryWindow = payload?.rate_limit?.secondary_window;
+    // A weekly-only plan puts its weekly limit in primary_window. Position is
+    // only a fallback for older responses without explicit durations.
+    const windows = [primaryWindow, secondaryWindow];
+    const durations = windows.map((window, i) => windowMsFor(window,
+        i === 0 ? SESSION_WINDOW_MS : WEEKLY_WINDOW_MS));
+    const sessionIndex = durations.findIndex(duration => duration !== null && duration < WEEKLY_WINDOW_MS);
+    const weeklyIndex = durations.findIndex(duration => duration !== null && duration >= WEEKLY_WINDOW_MS);
+    const session = windows[sessionIndex];
+    const weekly = windows[weeklyIndex];
+    const remaining = window => typeof window?.used_percent === 'number' && Number.isFinite(window.used_percent)
+        ? clampPercent(100 - window.used_percent) : null;
 
     return {
         data: {
-            sessionRemainingPct: clampPercent(100 - Number(primaryWindow?.used_percent)),
-            weeklyRemainingPct: clampPercent(100 - Number(secondaryWindow?.used_percent)),
-            sessionResetsAtIso: unixSecondsToIso(primaryWindow?.reset_at),
-            weeklyResetsAtIso: unixSecondsToIso(secondaryWindow?.reset_at),
-            sessionWindowMs: windowMsFor(primaryWindow, SESSION_WINDOW_MS),
-            weeklyWindowMs: windowMsFor(secondaryWindow, WEEKLY_WINDOW_MS),
+            planType: typeof payload?.plan_type === 'string' ? payload.plan_type : null,
+            availableWindows: [session && 'session', weekly && 'weekly'].filter(Boolean),
+            sessionRemainingPct: remaining(session),
+            weeklyRemainingPct: remaining(weekly),
+            sessionResetsAtIso: session ? unixSecondsToIso(session.reset_at) : null,
+            weeklyResetsAtIso: weekly ? unixSecondsToIso(weekly.reset_at) : null,
+            sessionWindowMs: durations[sessionIndex] ?? null,
+            weeklyWindowMs: durations[weeklyIndex] ?? null,
         },
         hasPrimaryWindow: Boolean(primaryWindow),
         hasSecondaryWindow: Boolean(secondaryWindow),
-        hasPartialData: !primaryWindow || !secondaryWindow,
+        hasPartialData: windows.some(window => window && remaining(window) === null),
     };
 }

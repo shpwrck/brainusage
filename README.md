@@ -9,6 +9,7 @@ Tracks your AI usage limits for **Claude** (Anthropic) and **Codex/ChatGPT** (Op
 ## Features
 
 - Session and weekly usage tracking for Claude and Codex
+- Codex plan detection with only the windows returned for your account (including weekly-only Pro)
 - Color-coded progress bars (green / yellow / red) based on remaining percentage
 - Configurable panel label: show minimum across all, or a specific window
 - Desktop notifications when usage drops below 20%
@@ -23,6 +24,29 @@ Tracks your AI usage limits for **Claude** (Anthropic) and **Codex/ChatGPT** (Op
   - Codex: `~/.codex/auth.json`
 
 These credential files are created automatically when you sign in to the respective CLI tools ([Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex CLI](https://github.com/openai/codex)).
+
+## Keeping Claude signed in
+
+Sign in locally with `claude auth login`. The GNOME extension refreshes expired
+access tokens and saves the replacement access token, refresh token and expiry
+back to `~/.claude/.credentials.json`, preserving other fields. Writes are atomic,
+owner-only (0600), and reject a changed credential file rather than overwriting a
+newer CLI login. Keep this credential file local to this machine; copying a shared
+refresh token between machines can lead to competing refreshes.
+
+If the server rejects a refresh, run `claude auth login` again and select Refresh
+in the extension. A revoked login cannot be kept alive automatically. After an
+extension upgrade on Wayland, log out and back in to load the new code.
+
+KDE retains refreshed credentials in memory; its read-only file adapter does not
+persist them across widget restarts. Claude Code must maintain its on-disk login.
+
+Codex reads `plan_type` and each window's duration from the usage API. A weekly
+primary window is shown as Weekly. Absent windows are hidden from the popup and
+selected panel metrics (and GNOME's Panel display menu), without contributing a
+false zero to the overall minimum. Saved metric selections are preserved if the
+account's available windows change later. Preferences lists all configurable
+metrics; only available windows render in the panel.
 
 ## Installation — GNOME
 
